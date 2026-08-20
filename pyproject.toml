@@ -52,6 +52,7 @@ dependencies = [
     "tyro<0.9.0",
     # ops
     "einops",
+    "liger-kernel>=0.8.0",
     "numpy",
     "pandas",
     "scipy",

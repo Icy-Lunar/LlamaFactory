@@ -21,7 +21,7 @@ from ...extras.misc import torch_gc
 from ...extras.packages import is_gradio_available
 from ...train.tuner import export_model
 from ..common import get_save_dir, load_config
-from ..locales import ALERTS
+from ..locales import ALERTS, LOCALES
 
 
 if is_gradio_available():
@@ -116,23 +116,43 @@ def save_model(
 
 
 def create_export_tab(engine: "Engine") -> dict[str, "Component"]:
-    with gr.Row():
-        export_size = gr.Slider(minimum=1, maximum=100, value=5, step=1)
-        export_quantization_bit = gr.Dropdown(choices=["none"] + GPTQ_BITS, value="none")
-        export_quantization_dataset = gr.Textbox(value="data/c4_demo.jsonl")
-        export_device = gr.Radio(choices=["cpu", "auto"], value="cpu")
-        export_legacy_format = gr.Checkbox()
+    with gr.Column(elem_classes="merge-page"):
+        merge_hero = gr.HTML(LOCALES["merge_hero"]["en"]["value"])
 
-    with gr.Row():
-        export_dir = gr.Textbox()
-        export_hub_model_id = gr.Textbox()
-        extra_args = gr.Textbox(value="{}")
+        with gr.Group(elem_classes="merge-card merge-source-card"):
+            merge_source_guide = gr.Markdown(LOCALES["merge_source_guide"]["en"]["value"])
+
+        with gr.Group(elem_classes="merge-card"):
+            merge_settings_guide = gr.Markdown(LOCALES["merge_settings_guide"]["en"]["value"])
+            with gr.Row():
+                export_size = gr.Slider(minimum=1, maximum=100, value=5, step=1)
+                export_quantization_bit = gr.Dropdown(choices=["none"] + GPTQ_BITS, value="none")
+                export_device = gr.Radio(choices=["cpu", "auto"], value="cpu")
+
+            with gr.Row():
+                export_quantization_dataset = gr.Textbox(value="data/c4_demo.jsonl", scale=2)
+                export_legacy_format = gr.Checkbox(scale=1)
+
+        with gr.Group(elem_classes="merge-card"):
+            merge_destination_guide = gr.Markdown(LOCALES["merge_destination_guide"]["en"]["value"])
+            with gr.Row():
+                export_dir = gr.Textbox(scale=2)
+                export_hub_model_id = gr.Textbox(scale=1)
+
+            extra_args = gr.Textbox(
+                value="{}",
+                lines=3,
+                label=LOCALES["merge_extra_args"]["en"]["label"],
+                info=LOCALES["merge_extra_args"]["en"]["info"],
+            )
+
+        export_btn = gr.Button(
+            LOCALES["merge_export_btn"]["en"]["value"], variant="primary", elem_classes="merge-action"
+        )
+        info_box = gr.Textbox(show_label=False, interactive=False, elem_classes="merge-status")
 
     checkpoint_path: gr.Dropdown = engine.manager.get_elem_by_id("top.checkpoint_path")
     checkpoint_path.change(can_quantize, [checkpoint_path], [export_quantization_bit], queue=False)
-
-    export_btn = gr.Button()
-    info_box = gr.Textbox(show_label=False, interactive=False)
 
     export_btn.click(
         save_model,
@@ -163,7 +183,11 @@ def create_export_tab(engine: "Engine") -> dict[str, "Component"]:
         export_legacy_format=export_legacy_format,
         export_dir=export_dir,
         export_hub_model_id=export_hub_model_id,
-        extra_args=extra_args,
-        export_btn=export_btn,
-        info_box=info_box,
+        merge_extra_args=extra_args,
+        merge_export_btn=export_btn,
+        merge_status=info_box,
+        merge_hero=merge_hero,
+        merge_source_guide=merge_source_guide,
+        merge_settings_guide=merge_settings_guide,
+        merge_destination_guide=merge_destination_guide,
     )

@@ -20,6 +20,7 @@ from ...extras.misc import use_modelscope, use_openmind
 from ...extras.packages import is_gradio_available
 from ..common import save_config
 from ..control import can_quantize, can_quantize_to, check_template, get_model_info, list_checkpoints, switch_hub
+from ..locales import LOCALES
 
 
 if is_gradio_available():
@@ -33,22 +34,25 @@ if TYPE_CHECKING:
 def create_top() -> dict[str, "Component"]:
     with gr.Row():
         lang = gr.Dropdown(choices=["en", "ru", "zh", "ko", "ja"], value=None, scale=1)
+
+    with gr.Row():
         available_models = list(SUPPORTED_MODELS.keys()) + ["Custom"]
         model_name = gr.Dropdown(choices=available_models, value=None, scale=2)
         model_path = gr.Textbox(scale=2)
         default_hub = "modelscope" if use_modelscope() else "openmind" if use_openmind() else "huggingface"
         hub_name = gr.Dropdown(choices=["huggingface", "modelscope", "openmind"], value=default_hub, scale=2)
 
-    with gr.Row():
-        finetuning_type = gr.Dropdown(choices=METHODS, value="lora", scale=1)
-        checkpoint_path = gr.Dropdown(multiselect=True, allow_custom_value=True, scale=6)
+    with gr.Accordion(LOCALES["manual_settings"]["en"]["label"], open=False) as manual_settings:
+        with gr.Row():
+            finetuning_type = gr.Dropdown(choices=METHODS, value="lora", scale=1)
+            checkpoint_path = gr.Dropdown(multiselect=True, allow_custom_value=True, scale=6)
 
-    with gr.Row():
-        quantization_bit = gr.Dropdown(choices=["none", "8", "4"], value="none", allow_custom_value=True)
-        quantization_method = gr.Dropdown(choices=["bnb", "hqq", "eetq"], value="bnb")
-        template = gr.Dropdown(choices=list(TEMPLATES.keys()), value="default")
-        rope_scaling = gr.Dropdown(choices=["none", "linear", "dynamic", "yarn", "llama3"], value="none")
-        booster = gr.Dropdown(choices=["auto", "flashattn2", "unsloth", "liger_kernel"], value="auto")
+        with gr.Row():
+            quantization_bit = gr.Dropdown(choices=["none", "8", "4"], value="none", allow_custom_value=True)
+            quantization_method = gr.Dropdown(choices=["bnb", "hqq", "eetq"], value="bnb")
+            template = gr.Dropdown(choices=list(TEMPLATES.keys()), value="default")
+            rope_scaling = gr.Dropdown(choices=["none", "linear", "dynamic", "yarn", "llama3"], value="none")
+            booster = gr.Dropdown(choices=["liger_kernel", "flashattn2", "unsloth"], value="liger_kernel")
 
     model_name.change(get_model_info, [model_name], [model_path, template], queue=False).then(
         list_checkpoints, [model_name, finetuning_type], [checkpoint_path], queue=False
@@ -69,6 +73,7 @@ def create_top() -> dict[str, "Component"]:
 
     return dict(
         lang=lang,
+        manual_settings=manual_settings,
         model_name=model_name,
         model_path=model_path,
         hub_name=hub_name,

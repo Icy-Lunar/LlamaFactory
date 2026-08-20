@@ -209,14 +209,6 @@ def save_cmd(args: dict[str, Any]) -> str:
     return os.path.join(output_dir, TRAINING_ARGS)
 
 
-def load_eval_results(path: os.PathLike) -> str:
-    r"""Get scores after evaluation."""
-    with open(path, encoding="utf-8") as f:
-        result = json.dumps(json.load(f), indent=4)
-
-    return f"```json\n{result}\n```\n"
-
-
 def calculate_pixels(pixels: str) -> int:
     r"""Calculate the number of pixels from the expression."""
     if "*" in pixels:

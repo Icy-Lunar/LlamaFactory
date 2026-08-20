@@ -22,7 +22,11 @@ USAGE = (
     "-" * 70
     + "\n"
     + "| Usage:                                                             |\n"
-    + "|   llamafactory-cli sft -h: train models                            |\n"
+    + "|   llamafactory-cli train -h: launch supervised training            |\n"
+    + "|   llamafactory-cli sft -h: launch supervised training              |\n"
+    + "|   llamafactory-cli dpo -h: launch preference training              |\n"
+    + "|   llamafactory-cli rm -h: launch reward-model training             |\n"
+    + "|   llamafactory-cli merge -h: merge adapters and export model       |\n"
     + "|   llamafactory-cli version: show version info                      |\n"
     + "| Hint: You can use `lmf` as a shortcut for `llamafactory-cli`.      |\n"
     + "-" * 70
@@ -119,11 +123,6 @@ def launch():
         )
 
         sys.exit(process.returncode)
-
-    elif command == "chat":
-        from .samplers.cli_sampler import run_chat
-
-        run_chat()
 
     elif command == "merge":
         from llamafactory.v1.plugins.model_plugins.peft import merge_and_export_model

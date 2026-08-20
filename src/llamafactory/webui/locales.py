@@ -671,28 +671,6 @@ LOCALES = {
             "info": "勾配累積のステップ数。",
         },
     },
-    "val_size": {
-        "en": {
-            "label": "Val size",
-            "info": "Percentage of validation set from the entire dataset.",
-        },
-        "ru": {
-            "label": "Размер валидации",
-            "info": "Пропорция данных в наборе для разработки.",
-        },
-        "zh": {
-            "label": "验证集比例",
-            "info": "验证集占全部样本的百分比。",
-        },
-        "ko": {
-            "label": "검증 데이터셋 크기",
-            "info": "개발 데이터셋에서 검증 데이터의 비율.",
-        },
-        "ja": {
-            "label": "検証セットサイズ",
-            "info": "データセット全体に対する検証セットの割合。",
-        },
-    },
     "lr_scheduler_type": {
         "en": {
             "label": "LR scheduler",
@@ -3014,6 +2992,1181 @@ LOCALES = {
         },
     },
 }
+
+
+_WIZARD_TRANSLATIONS = {
+    "en": {
+        "steps": ("Model & environment", "Dataset", "Hyperparameters", "Review & run"),
+        "hero_kicker": "GUIDED SETUP",
+        "hero_title": "Complete a training setup in four steps",
+        "hero_description": (
+            "Configure the model, data, and hyperparameters one decision at a time, "
+            "just like the Windows out-of-box experience."
+        ),
+        "headers": (
+            (
+                "Choose a model and runtime environment",
+                "Start with the model source, finetuning method, and compute environment required for training.",
+            ),
+            (
+                "Choose the training task and dataset",
+                "Select a training stage and dataset. Preview samples before continuing to verify the data format.",
+            ),
+            (
+                "Configure training hyperparameters",
+                "Begin with the recommended baseline, then adjust gradually based on memory usage and loss curves.",
+            ),
+            (
+                "Review the configuration and start training",
+                "Check the key settings before starting. Preview the command and save the arguments when needed.",
+            ),
+        ),
+        "model_card": (
+            "### 1. Model and download source\n"
+            "Choose a local model path, or download a model from Hugging Face, ModelScope, or OpenMind."
+        ),
+        "environment_card": (
+            "### 2. Results and compute environment\n"
+            "The output directory and configuration filename are generated automatically and remain editable."
+        ),
+        "data_guide": (
+            "### Validate the dataset\n"
+            "- For instruction tuning, normally choose **Supervised Fine-Tuning** and use instruction-response data.\n"
+            "- DPO, KTO, and ORPO require paired or preference-labelled data.\n"
+            "- For a first run, validate the pipeline with a small sample before scaling up."
+        ),
+        "recommendation_title": "RECOMMENDED BASELINE",
+        "recommendation_value": "LoRA / QLoRA",
+        "recommendation_description": (
+            "Start with a learning rate of 5e-5. If memory is insufficient, reduce the per-device batch size or "
+            "sequence length first, then increase gradient accumulation to preserve the effective batch size."
+        ),
+        "core_params": (
+            "### Core parameters\nThese settings have the largest impact on speed, memory usage, and convergence."
+        ),
+        "launch_card": (
+            "### Preflight checklist\n"
+            "Verify that the model path and dataset are accessible and that the output disk has enough free space."
+        ),
+        "buttons": (
+            "Next: choose dataset  →",
+            "←  Back: model & environment",
+            "Next: configure hyperparameters  →",
+            "←  Back: dataset",
+            "Next: review configuration  →",
+            "←  Back: hyperparameters",
+        ),
+        "accordions": (
+            "Advanced training parameters (optional)",
+            "Freeze tuning parameters",
+            "LoRA parameters",
+            "Preference training / RLHF parameters",
+            "Multimodal parameters",
+            "GaLore parameters",
+            "APOLLO parameters",
+            "BAdam parameters",
+            "SwanLab parameters",
+        ),
+    },
+    "ru": {
+        "steps": ("Модель и среда", "Данные", "Гиперпараметры", "Проверка и запуск"),
+        "hero_kicker": "ПОШАГОВАЯ НАСТРОЙКА",
+        "hero_title": "Настройте обучение за четыре шага",
+        "hero_description": (
+            "Последовательно настройте модель, данные и гиперпараметры — как при первоначальной настройке Windows."
+        ),
+        "headers": (
+            (
+                "Выберите модель и среду выполнения",
+                "Сначала укажите источник модели, метод дообучения и вычислительную среду.",
+            ),
+            (
+                "Выберите задачу и набор данных",
+                "Укажите этап обучения и набор данных. Перед продолжением проверьте примеры и формат данных.",
+            ),
+            (
+                "Настройте гиперпараметры обучения",
+                "Начните с рекомендуемых значений и меняйте их постепенно с учётом памяти и графика потерь.",
+            ),
+            (
+                "Проверьте конфигурацию и запустите обучение",
+                "Проверьте ключевые параметры. При необходимости просмотрите команду и сохраните аргументы.",
+            ),
+        ),
+        "model_card": (
+            "### 1. Модель и источник загрузки\n"
+            "Выберите локальный путь или загрузите модель из Hugging Face, ModelScope либо OpenMind."
+        ),
+        "environment_card": (
+            "### 2. Результаты и вычислительная среда\n"
+            "Каталог результатов и имя конфигурации создаются автоматически, но их можно изменить."
+        ),
+        "data_guide": (
+            "### Проверка набора данных\n"
+            "- Для обучения по инструкциям обычно выбирают **Supervised Fine-Tuning** и пары инструкция–ответ.\n"
+            "- DPO, KTO и ORPO требуют парных данных или меток предпочтений.\n"
+            "- Сначала проверьте процесс на небольшой выборке, затем увеличивайте объём."
+        ),
+        "recommendation_title": "РЕКОМЕНДУЕМЫЕ НАСТРОЙКИ",
+        "recommendation_value": "LoRA / QLoRA",
+        "recommendation_description": (
+            "Начните со скорости обучения 5e-5. При нехватке памяти сначала уменьшите размер пакета или длину "
+            "последовательности, затем увеличьте накопление градиента."
+        ),
+        "core_params": ("### Основные параметры\nОни сильнее всего влияют на скорость, расход памяти и сходимость."),
+        "launch_card": (
+            "### Проверка перед запуском\n"
+            "Убедитесь, что модель и данные доступны, а на диске для результатов достаточно места."
+        ),
+        "buttons": (
+            "Далее: выбрать данные  →",
+            "←  Назад: модель и среда",
+            "Далее: гиперпараметры  →",
+            "←  Назад: данные",
+            "Далее: проверить конфигурацию  →",
+            "←  Назад: гиперпараметры",
+        ),
+        "accordions": (
+            "Расширенные параметры обучения (необязательно)",
+            "Параметры замороженного обучения",
+            "Параметры LoRA",
+            "Параметры предпочтений / RLHF",
+            "Параметры мультимодальности",
+            "Параметры GaLore",
+            "Параметры APOLLO",
+            "Параметры BAdam",
+            "Параметры SwanLab",
+        ),
+    },
+    "zh": {
+        "steps": ("模型与环境", "选择数据", "训练参数", "确认并启动"),
+        "hero_kicker": "分步配置",
+        "hero_title": "用四步完成一次训练配置",
+        "hero_description": ("像 Windows 首次开机设置一样，逐步完成模型、数据和超参数配置；每一步只处理一类决定。"),
+        "headers": (
+            (
+                "选择模型与运行环境",
+                "先确定模型来源、微调方式和计算环境。这里汇总了开始训练前必须确认的基础设置。",
+            ),
+            (
+                "选择训练任务与数据",
+                "选择训练阶段和数据集。建议先预览样本，确认字段格式与所选训练阶段匹配。",
+            ),
+            (
+                "配置训练超参数",
+                "先使用推荐起点完成一次可运行配置，再根据显存占用和训练曲线逐步调整。",
+            ),
+            (
+                "确认配置并启动训练",
+                "检查关键设置，必要时返回上一步修改。建议先预览命令并保存参数，再启动训练。",
+            ),
+        ),
+        "model_card": ("### 1. 模型与下载来源\n选择本地模型路径，或从 Hugging Face、ModelScope、OpenMind 获取模型。"),
+        "environment_card": ("### 2. 结果保存与计算环境\n输出目录和配置文件会自动按当前时间生成，也可以手动修改。"),
+        "data_guide": (
+            "### 数据检查\n"
+            "- 指令微调通常选择 **Supervised Fine-Tuning**，数据应包含指令与回答。\n"
+            "- DPO、KTO、ORPO 等偏好训练需要成对或带偏好标签的数据。\n"
+            "- 首次运行建议先使用小数据集验证流程，再扩大最大样本数。"
+        ),
+        "recommendation_title": "推荐起点",
+        "recommendation_value": "LoRA / QLoRA",
+        "recommendation_description": (
+            "学习率可从 5e-5 开始；显存不足时先降低单卡批次或序列长度，再增加梯度累积保持有效批次。"
+        ),
+        "core_params": "### 核心参数\n这些参数最直接地影响训练速度、显存和收敛效果。",
+        "launch_card": ("### 启动前检查\n确认模型路径与数据集可访问，并保证输出目录有足够磁盘空间。"),
+        "buttons": (
+            "下一步：选择数据  →",
+            "←  上一步：模型与环境",
+            "下一步：配置超参数  →",
+            "←  上一步：选择数据",
+            "下一步：确认配置  →",
+            "←  上一步：训练参数",
+        ),
+        "accordions": (
+            "高级训练参数（可选）",
+            "冻结微调参数",
+            "LoRA 参数",
+            "偏好训练 / RLHF 参数",
+            "多模态参数",
+            "GaLore 参数",
+            "APOLLO 参数",
+            "BAdam 参数",
+            "SwanLab 参数",
+        ),
+    },
+    "ko": {
+        "steps": ("모델 및 환경", "데이터", "하이퍼파라미터", "검토 및 시작"),
+        "hero_kicker": "단계별 설정",
+        "hero_title": "네 단계로 학습 설정 완료",
+        "hero_description": ("Windows 초기 설정처럼 모델, 데이터, 하이퍼파라미터를 한 단계씩 설정합니다."),
+        "headers": (
+            ("모델 및 실행 환경 선택", "먼저 모델 소스, 파인튜닝 방법과 컴퓨팅 환경을 선택하세요."),
+            ("학습 작업 및 데이터 선택", "학습 단계와 데이터셋을 선택하고 샘플 형식을 미리 확인하세요."),
+            ("학습 하이퍼파라미터 설정", "권장 기준값에서 시작해 메모리 사용량과 손실 곡선에 따라 조정하세요."),
+            ("설정을 검토하고 학습 시작", "핵심 설정을 확인한 후 명령을 미리 보고 필요하면 인수를 저장하세요."),
+        ),
+        "model_card": (
+            "### 1. 모델 및 다운로드 소스\n"
+            "로컬 경로를 선택하거나 Hugging Face, ModelScope, OpenMind에서 모델을 받으세요."
+        ),
+        "environment_card": (
+            "### 2. 결과 및 컴퓨팅 환경\n출력 디렉터리와 설정 파일명은 자동 생성되며 수정할 수 있습니다."
+        ),
+        "data_guide": (
+            "### 데이터셋 확인\n"
+            "- 명령어 튜닝은 보통 **Supervised Fine-Tuning**과 명령-응답 데이터를 사용합니다.\n"
+            "- DPO, KTO, ORPO에는 쌍 데이터 또는 선호 레이블이 필요합니다.\n"
+            "- 처음에는 작은 샘플로 전체 흐름을 검증한 뒤 규모를 늘리세요."
+        ),
+        "recommendation_title": "권장 기준값",
+        "recommendation_value": "LoRA / QLoRA",
+        "recommendation_description": (
+            "학습률 5e-5에서 시작하세요. 메모리가 부족하면 장치별 배치나 시퀀스 길이를 먼저 줄이고 "
+            "그래디언트 누적을 늘려 유효 배치를 유지하세요."
+        ),
+        "core_params": "### 핵심 파라미터\n속도, 메모리 사용량 및 수렴에 가장 큰 영향을 줍니다.",
+        "launch_card": (
+            "### 시작 전 확인\n모델 경로와 데이터셋에 접근할 수 있고 출력 디스크 공간이 충분한지 확인하세요."
+        ),
+        "buttons": (
+            "다음: 데이터 선택  →",
+            "←  이전: 모델 및 환경",
+            "다음: 하이퍼파라미터 설정  →",
+            "←  이전: 데이터",
+            "다음: 설정 검토  →",
+            "←  이전: 하이퍼파라미터",
+        ),
+        "accordions": (
+            "고급 학습 파라미터(선택)",
+            "동결 튜닝 파라미터",
+            "LoRA 파라미터",
+            "선호 학습 / RLHF 파라미터",
+            "멀티모달 파라미터",
+            "GaLore 파라미터",
+            "APOLLO 파라미터",
+            "BAdam 파라미터",
+            "SwanLab 파라미터",
+        ),
+    },
+    "ja": {
+        "steps": ("モデルと環境", "データ", "ハイパーパラメータ", "確認と開始"),
+        "hero_kicker": "ガイド付きセットアップ",
+        "hero_title": "4 ステップでトレーニングを設定",
+        "hero_description": ("Windows の初期設定のように、モデル、データ、ハイパーパラメータを順番に設定します。"),
+        "headers": (
+            ("モデルと実行環境を選択", "まずモデルの取得元、ファインチューニング方法、計算環境を選択します。"),
+            ("タスクとデータセットを選択", "学習ステージとデータを選び、続行前にサンプル形式を確認します。"),
+            ("学習ハイパーパラメータを設定", "推奨値から始め、メモリ使用量と損失曲線に応じて段階的に調整します。"),
+            (
+                "設定を確認して学習を開始",
+                "重要な設定を確認し、必要に応じてコマンドのプレビューと引数の保存を行います。",
+            ),
+        ),
+        "model_card": (
+            "### 1. モデルとダウンロード元\n"
+            "ローカルパスを選ぶか、Hugging Face、ModelScope、OpenMind からモデルを取得します。"
+        ),
+        "environment_card": (
+            "### 2. 結果と計算環境\n出力先と設定ファイル名は自動生成され、必要に応じて変更できます。"
+        ),
+        "data_guide": (
+            "### データセットの確認\n"
+            "- 指示チューニングでは通常 **Supervised Fine-Tuning** と指示・回答データを使います。\n"
+            "- DPO、KTO、ORPO にはペアデータまたは選好ラベルが必要です。\n"
+            "- 最初は少量のサンプルで処理全体を確認してから規模を拡大してください。"
+        ),
+        "recommendation_title": "推奨設定",
+        "recommendation_value": "LoRA / QLoRA",
+        "recommendation_description": (
+            "学習率 5e-5 から始めます。メモリ不足の場合は、デバイスごとのバッチまたは系列長を先に下げ、"
+            "勾配累積を増やして有効バッチを維持します。"
+        ),
+        "core_params": "### 主要パラメータ\n速度、メモリ使用量、収束に最も大きく影響します。",
+        "launch_card": (
+            "### 開始前の確認\nモデルとデータにアクセスでき、出力ディスクに十分な空きがあることを確認します。"
+        ),
+        "buttons": (
+            "次へ：データを選択  →",
+            "←  戻る：モデルと環境",
+            "次へ：ハイパーパラメータ  →",
+            "←  戻る：データ",
+            "次へ：設定を確認  →",
+            "←  戻る：ハイパーパラメータ",
+        ),
+        "accordions": (
+            "高度な学習パラメータ（任意）",
+            "Freeze チューニングパラメータ",
+            "LoRA パラメータ",
+            "選好学習 / RLHF パラメータ",
+            "マルチモーダルパラメータ",
+            "GaLore パラメータ",
+            "APOLLO パラメータ",
+            "BAdam パラメータ",
+            "SwanLab パラメータ",
+        ),
+    },
+}
+
+
+def _build_wizard_hero(lang: str) -> str:
+    text = _WIZARD_TRANSLATIONS[lang]
+    return (
+        '<section class="oobe-hero">'
+        f'<div class="oobe-kicker">{text["hero_kicker"]}</div>'
+        f"<h1>{text['hero_title']}</h1><p>{text['hero_description']}</p>"
+        "</section>"
+    )
+
+
+def _build_wizard_header(lang: str, step: int) -> str:
+    text = _WIZARD_TRANSLATIONS[lang]
+    step_items = []
+    for index, label in enumerate(text["steps"], start=1):
+        state = "is-active" if index == step else "is-done" if index < step else ""
+        step_items.append(
+            f'<div class="oobe-step {state}"><span class="oobe-step-number">{index}</span>'
+            f'<span class="oobe-step-label">{label}</span></div>'
+        )
+
+    title, description = text["headers"][step - 1]
+    return (
+        '<section class="oobe-page-header">'
+        f'<div class="oobe-kicker">{step} / {len(text["steps"])}</div>'
+        f"<h2>{title}</h2><p>{description}</p>"
+        f'<div class="oobe-stepper">{"".join(step_items)}</div>'
+        "</section>"
+    )
+
+
+def _build_wizard_recommendation(lang: str) -> str:
+    text = _WIZARD_TRANSLATIONS[lang]
+    return (
+        '<section class="oobe-recommendation"><div>'
+        f"<strong>{text['recommendation_title']}</strong>"
+        f"<span>{text['recommendation_value']}</span></div>"
+        f"<p>{text['recommendation_description']}</p></section>"
+    )
+
+
+LOCALES.update(
+    {
+        "wizard_hero": {lang: {"value": _build_wizard_hero(lang)} for lang in _WIZARD_TRANSLATIONS},
+        **{
+            f"wizard_header_{step}": {
+                lang: {"value": _build_wizard_header(lang, step)} for lang in _WIZARD_TRANSLATIONS
+            }
+            for step in range(1, 5)
+        },
+        "wizard_model_card": {lang: {"value": text["model_card"]} for lang, text in _WIZARD_TRANSLATIONS.items()},
+        "wizard_environment_card": {
+            lang: {"value": text["environment_card"]} for lang, text in _WIZARD_TRANSLATIONS.items()
+        },
+        "wizard_data_guide": {lang: {"value": text["data_guide"]} for lang, text in _WIZARD_TRANSLATIONS.items()},
+        "wizard_recommendation": {
+            lang: {"value": _build_wizard_recommendation(lang)} for lang in _WIZARD_TRANSLATIONS
+        },
+        "wizard_core_params": {lang: {"value": text["core_params"]} for lang, text in _WIZARD_TRANSLATIONS.items()},
+        "wizard_launch_card": {lang: {"value": text["launch_card"]} for lang, text in _WIZARD_TRANSLATIONS.items()},
+        **{
+            key: {lang: {"value": text["buttons"][index]} for lang, text in _WIZARD_TRANSLATIONS.items()}
+            for index, key in enumerate(
+                (
+                    "wizard_model_next_btn",
+                    "wizard_data_back_btn",
+                    "wizard_data_next_btn",
+                    "wizard_params_back_btn",
+                    "wizard_params_next_btn",
+                    "wizard_review_back_btn",
+                )
+            )
+        },
+        **{
+            key: {lang: {"label": text["accordions"][index]} for lang, text in _WIZARD_TRANSLATIONS.items()}
+            for index, key in enumerate(
+                (
+                    "extra_tab",
+                    "freeze_tab",
+                    "lora_tab",
+                    "rlhf_tab",
+                    "mm_tab",
+                    "galore_tab",
+                    "apollo_tab",
+                    "badam_tab",
+                    "swanlab_tab",
+                )
+            )
+        },
+    }
+)
+
+
+WIZARD_SUMMARY_LOCALES = {
+    "en": {
+        "missing_model": "Not selected",
+        "missing_path": "Not provided",
+        "missing_dataset": "Not selected",
+        "missing_output": "Not provided",
+        "no_quantization": "No quantization",
+        "quantization": "{bit}-bit QLoRA",
+        "title": "Configuration summary",
+        "subtitle": "Review these settings before starting training",
+        "labels": ("Model", "Finetuning", "Training task", "Learning", "Batch", "Sequence & precision", "Output"),
+        "learning": "LR {learning_rate} · {epochs} epochs",
+        "batch": "Per-device {batch_size} × accumulation {accumulation} = effective batch {effective_batch}",
+        "sequence": "{cutoff_len} tokens · {compute_type}",
+    },
+    "ru": {
+        "missing_model": "Не выбрано",
+        "missing_path": "Не указано",
+        "missing_dataset": "Не выбрано",
+        "missing_output": "Не указано",
+        "no_quantization": "Без квантования",
+        "quantization": "QLoRA, {bit} бит",
+        "title": "Сводка конфигурации",
+        "subtitle": "Проверьте параметры перед запуском обучения",
+        "labels": (
+            "Модель",
+            "Дообучение",
+            "Задача",
+            "Обучение",
+            "Пакет",
+            "Последовательность и точность",
+            "Результаты",
+        ),
+        "learning": "LR {learning_rate} · эпох: {epochs}",
+        "batch": "На устройство {batch_size} × накопление {accumulation} = эффективный пакет {effective_batch}",
+        "sequence": "{cutoff_len} токенов · {compute_type}",
+    },
+    "zh": {
+        "missing_model": "尚未选择",
+        "missing_path": "尚未填写",
+        "missing_dataset": "尚未选择",
+        "missing_output": "尚未填写",
+        "no_quantization": "不量化",
+        "quantization": "{bit}-bit QLoRA",
+        "title": "配置摘要",
+        "subtitle": "请确认后再启动训练",
+        "labels": ("模型", "微调方案", "训练任务", "学习设置", "批处理", "序列与精度", "输出目录"),
+        "learning": "学习率 {learning_rate} · {epochs} 个周期",
+        "batch": "单卡 {batch_size} × 累积 {accumulation} = 有效批次 {effective_batch}",
+        "sequence": "{cutoff_len} tokens · {compute_type}",
+    },
+    "ko": {
+        "missing_model": "선택하지 않음",
+        "missing_path": "입력하지 않음",
+        "missing_dataset": "선택하지 않음",
+        "missing_output": "입력하지 않음",
+        "no_quantization": "양자화 없음",
+        "quantization": "{bit}-bit QLoRA",
+        "title": "설정 요약",
+        "subtitle": "학습을 시작하기 전에 설정을 확인하세요",
+        "labels": ("모델", "파인튜닝", "학습 작업", "학습 설정", "배치", "시퀀스 및 정밀도", "출력"),
+        "learning": "학습률 {learning_rate} · {epochs} 에폭",
+        "batch": "장치별 {batch_size} × 누적 {accumulation} = 유효 배치 {effective_batch}",
+        "sequence": "{cutoff_len} 토큰 · {compute_type}",
+    },
+    "ja": {
+        "missing_model": "未選択",
+        "missing_path": "未入力",
+        "missing_dataset": "未選択",
+        "missing_output": "未入力",
+        "no_quantization": "量子化なし",
+        "quantization": "{bit}-bit QLoRA",
+        "title": "設定の概要",
+        "subtitle": "学習を開始する前に設定を確認してください",
+        "labels": ("モデル", "ファインチューニング", "学習タスク", "学習設定", "バッチ", "系列と精度", "出力先"),
+        "learning": "学習率 {learning_rate} · {epochs} エポック",
+        "batch": "デバイスごと {batch_size} × 累積 {accumulation} = 有効バッチ {effective_batch}",
+        "sequence": "{cutoff_len} トークン · {compute_type}",
+    },
+}
+
+
+WIZARD_GUIDANCE_LOCALES = {
+    "en": {
+        "questionnaire": "### Tell us what you want to train\nAnswer four questions. The system will fill in a safe starting configuration for you.",
+        "goal_label": "What do you want the model to learn?",
+        "goal_info": "Choose the outcome closest to your use case.",
+        "goal_choices": (
+            ("Follow instructions and answer questions", "instruction"),
+            ("Prefer better answers", "preference"),
+            ("Continue learning from raw text", "pretrain"),
+        ),
+        "hardware_label": "How much GPU memory is available?",
+        "hardware_info": "Choose the memory of one GPU. Select multi-GPU only when distributed training is configured.",
+        "hardware_choices": (
+            ("8 GB or less", "low"),
+            ("12–16 GB", "mid"),
+            ("24–48 GB", "high"),
+            ("Multi-GPU / 80 GB+", "multi"),
+        ),
+        "model_size_label": "How large is the model?",
+        "model_size_info": "Use the parameter count shown in the model name or documentation.",
+        "model_size_choices": (
+            ("3B or smaller", "small"),
+            ("7B–8B", "medium"),
+            ("13B–34B", "large"),
+            ("70B or larger", "xlarge"),
+        ),
+        "priority_label": "What should the system prioritize?",
+        "priority_info": "Balanced is recommended for the first run.",
+        "params_guide": "### Choose only what you want to change\nThe recommended configuration is already complete. Select one branch below; unrelated parameters stay hidden.",
+        "param_mode_label": "What do you want to adjust?",
+        "param_mode_info": "The branch suggested by your earlier priority is selected automatically.",
+        "param_mode_choices": (
+            ("Nothing — use the recommendation", "recommended"),
+            ("GPU memory and training speed", "resources"),
+            ("Learning quality and convergence", "learning"),
+            ("Expert configuration", "expert"),
+        ),
+        "resource_params_guide": "### GPU memory and speed\nOnly the four settings that directly affect peak VRAM and throughput are shown.",
+        "learning_params_guide": "### Learning quality and convergence\nAdjust the learning schedule without exposing infrastructure or expert options.",
+        "show_advanced_label": "I want to manually adjust the generated parameters",
+        "show_advanced_info": "Optional. Turning this on exposes technical and expert settings.",
+        "priority_choices": (
+            ("Balanced and reliable", "balanced"),
+            ("Use less GPU memory", "memory"),
+            ("Train faster", "speed"),
+            ("Maximum quality", "quality"),
+        ),
+        "apply_button": "Generate my recommended configuration",
+        "manual_settings": "Review or manually adjust generated settings",
+        "result_title": "Recommended configuration applied",
+        "result_intro": "These values are a safe starting point for the selected goal and hardware.",
+        "result_labels": (
+            "Method",
+            "Quantization",
+            "Precision",
+            "Sequence",
+            "Effective batch",
+            "Distributed training",
+        ),
+        "none": "None",
+        "tokens": "{value} tokens",
+        "effective_batch": "{value} samples",
+        "reason_balanced": "Balanced mode keeps memory use predictable while preserving training stability.",
+        "reason_memory": "Memory-saving mode uses smaller batches and 4-bit loading where supported.",
+        "reason_speed": "Speed mode increases device batch size when the selected hardware has room.",
+        "reason_quality": "Quality mode preserves precision and context length when the selected hardware can support it.",
+        "result_footer": "You can continue without changing advanced parameters. Open manual settings only when you need an exception.",
+        "error_profile": "Generate the recommended configuration before continuing.",
+        "error_model": "Select a model before continuing.",
+        "error_path": "Provide a model path or repository ID before continuing.",
+        "error_output": "Choose an output directory before continuing.",
+        "error_dataset": "Select at least one training dataset before continuing.",
+        "error_learning_rate": "Learning rate must be a positive number.",
+        "error_epochs": "Training epochs must be a positive number.",
+        "error_batch": "Batch size and gradient accumulation must both be at least 1.",
+    },
+    "ru": {
+        "questionnaire": "### Расскажите, чему нужно обучить модель\nОтветьте на четыре вопроса — система заполнит безопасную начальную конфигурацию.",
+        "goal_label": "Чему должна научиться модель?",
+        "goal_info": "Выберите результат, наиболее близкий к вашему сценарию.",
+        "goal_choices": (
+            ("Следовать инструкциям и отвечать", "instruction"),
+            ("Предпочитать лучшие ответы", "preference"),
+            ("Продолжить обучение на текстах", "pretrain"),
+        ),
+        "hardware_label": "Сколько видеопамяти доступно?",
+        "hardware_info": "Укажите память одной GPU. Мульти-GPU выбирайте только при настроенном распределённом обучении.",
+        "hardware_choices": (
+            ("8 ГБ или меньше", "low"),
+            ("12–16 ГБ", "mid"),
+            ("24–48 ГБ", "high"),
+            ("Мульти-GPU / 80 ГБ+", "multi"),
+        ),
+        "model_size_label": "Каков размер модели?",
+        "model_size_info": "Используйте число параметров из имени или документации модели.",
+        "model_size_choices": (
+            ("3B или меньше", "small"),
+            ("7B–8B", "medium"),
+            ("13B–34B", "large"),
+            ("70B или больше", "xlarge"),
+        ),
+        "priority_label": "Что важнее всего?",
+        "priority_info": "Для первого запуска рекомендуется сбалансированный режим.",
+        "params_guide": "### Выберите только то, что хотите изменить\nРекомендуемая конфигурация уже готова. Выберите одну ветку — остальные параметры останутся скрыты.",
+        "param_mode_label": "Что вы хотите изменить?",
+        "param_mode_info": "Ветка выбирается автоматически по указанному ранее приоритету.",
+        "param_mode_choices": (
+            ("Ничего — использовать рекомендацию", "recommended"),
+            ("Видеопамять и скорость", "resources"),
+            ("Качество и сходимость", "learning"),
+            ("Экспертная конфигурация", "expert"),
+        ),
+        "resource_params_guide": "### Видеопамять и скорость\nПоказаны только четыре параметра, напрямую влияющие на пик памяти и производительность.",
+        "learning_params_guide": "### Качество и сходимость\nНастройте процесс обучения без инфраструктурных и экспертных параметров.",
+        "show_advanced_label": "Я хочу изменить созданные параметры вручную",
+        "show_advanced_info": "Необязательно. Этот переключатель открывает технические и экспертные настройки.",
+        "priority_choices": (
+            ("Баланс и надёжность", "balanced"),
+            ("Меньше видеопамяти", "memory"),
+            ("Быстрее обучение", "speed"),
+            ("Максимум качества", "quality"),
+        ),
+        "apply_button": "Создать рекомендуемую конфигурацию",
+        "manual_settings": "Проверить или изменить созданные настройки вручную",
+        "result_title": "Рекомендуемая конфигурация применена",
+        "result_intro": "Это безопасные начальные значения для выбранной задачи и оборудования.",
+        "result_labels": (
+            "Метод",
+            "Квантизация",
+            "Точность",
+            "Последовательность",
+            "Эффективный пакет",
+            "Распределённое обучение",
+        ),
+        "none": "Нет",
+        "tokens": "{value} токенов",
+        "effective_batch": "{value} примеров",
+        "reason_balanced": "Сбалансированный режим делает расход памяти предсказуемым и сохраняет стабильность обучения.",
+        "reason_memory": "Экономный режим уменьшает пакет и использует 4-битную загрузку, когда она поддерживается.",
+        "reason_speed": "Быстрый режим увеличивает пакет на устройство, если выбранное оборудование это позволяет.",
+        "reason_quality": "Режим качества сохраняет точность и длину контекста, если хватает оборудования.",
+        "result_footer": "Можно продолжать без изменения расширенных параметров. Открывайте ручные настройки только для особых случаев.",
+        "error_profile": "Перед продолжением создайте рекомендуемую конфигурацию.",
+        "error_model": "Перед продолжением выберите модель.",
+        "error_path": "Перед продолжением укажите путь к модели или ID репозитория.",
+        "error_output": "Перед продолжением выберите каталог результатов.",
+        "error_dataset": "Перед продолжением выберите хотя бы один набор данных.",
+        "error_learning_rate": "Скорость обучения должна быть положительным числом.",
+        "error_epochs": "Количество эпох должно быть положительным числом.",
+        "error_batch": "Размер пакета и накопление градиента должны быть не меньше 1.",
+    },
+    "zh": {
+        "questionnaire": "### 告诉我们你想训练什么\n只需回答四个问题，系统会自动生成一套安全的起始配置。",
+        "goal_label": "你希望模型学会什么？",
+        "goal_info": "请选择最接近实际业务目标的一项。",
+        "goal_choices": (
+            ("遵循指令并回答问题", "instruction"),
+            ("更偏好高质量回答", "preference"),
+            ("从原始文本继续学习", "pretrain"),
+        ),
+        "hardware_label": "可用的 GPU 显存是多少？",
+        "hardware_info": "请选择单张 GPU 的显存；仅在已配置分布式训练时选择多卡。",
+        "hardware_choices": (
+            ("8 GB 或更少", "low"),
+            ("12–16 GB", "mid"),
+            ("24–48 GB", "high"),
+            ("多卡 / 80 GB 以上", "multi"),
+        ),
+        "model_size_label": "模型规模是多少？",
+        "model_size_info": "请参考模型名称或文档中的参数量。",
+        "model_size_choices": (
+            ("3B 或更小", "small"),
+            ("7B–8B", "medium"),
+            ("13B–34B", "large"),
+            ("70B 或更大", "xlarge"),
+        ),
+        "priority_label": "这次训练优先考虑什么？",
+        "priority_info": "首次运行建议选择均衡可靠。",
+        "params_guide": "### 只选择你想调整的内容\n推荐配置已经完整生成。请选择一个分支，其他无关参数会保持隐藏。",
+        "param_mode_label": "你想调整哪一部分？",
+        "param_mode_info": "系统会根据前面选择的优化重点自动进入建议分支。",
+        "param_mode_choices": (
+            ("不调整，直接使用推荐配置", "recommended"),
+            ("显存占用与训练速度", "resources"),
+            ("学习质量与收敛效果", "learning"),
+            ("专家级完整配置", "expert"),
+        ),
+        "resource_params_guide": "### 显存占用与训练速度\n这里只显示直接影响峰值显存和吞吐量的四个参数。",
+        "learning_params_guide": "### 学习质量与收敛效果\n只调整学习策略，不显示基础设施和专家选项。",
+        "show_advanced_label": "我要手动调整系统生成的参数",
+        "show_advanced_info": "可选。开启后会显示技术参数和专家设置。",
+        "priority_choices": (
+            ("均衡可靠", "balanced"),
+            ("节省显存", "memory"),
+            ("更快训练", "speed"),
+            ("最高质量", "quality"),
+        ),
+        "apply_button": "生成我的推荐配置",
+        "manual_settings": "查看或手动调整系统生成的设置",
+        "result_title": "已应用推荐配置",
+        "result_intro": "这些参数是根据你的目标和硬件生成的安全起始值。",
+        "result_labels": ("微调方法", "量化", "计算精度", "序列长度", "有效批次", "分布式训练"),
+        "none": "无",
+        "tokens": "{value} 个 token",
+        "effective_batch": "{value} 个样本",
+        "reason_balanced": "均衡模式会控制显存占用，同时保持训练稳定性。",
+        "reason_memory": "显存优先模式会缩小批次，并在支持时使用 4 位加载。",
+        "reason_speed": "速度优先模式会在硬件允许时增大单卡批次。",
+        "reason_quality": "质量优先模式会在硬件允许时保留更高精度和更长上下文。",
+        "result_footer": "你可以不修改高级参数直接继续；只有存在特殊需求时才需要展开手动设置。",
+        "error_profile": "请先生成推荐配置，再继续下一步。",
+        "error_model": "请先选择模型，再继续下一步。",
+        "error_path": "请先填写模型路径或仓库 ID，再继续下一步。",
+        "error_output": "请先选择输出目录，再继续下一步。",
+        "error_dataset": "请至少选择一个训练数据集，再继续下一步。",
+        "error_learning_rate": "学习率必须是大于 0 的数字。",
+        "error_epochs": "训练轮数必须是大于 0 的数字。",
+        "error_batch": "批处理大小和梯度累积都必须至少为 1。",
+    },
+    "ko": {
+        "questionnaire": "### 무엇을 학습할지 알려 주세요\n네 가지 질문에 답하면 시스템이 안전한 시작 구성을 자동으로 채웁니다.",
+        "goal_label": "모델이 무엇을 학습해야 하나요?",
+        "goal_info": "사용 목적과 가장 가까운 결과를 선택하세요.",
+        "goal_choices": (
+            ("지시를 따르고 질문에 답하기", "instruction"),
+            ("더 좋은 답변을 선호하기", "preference"),
+            ("원시 텍스트로 계속 학습하기", "pretrain"),
+        ),
+        "hardware_label": "사용 가능한 GPU 메모리는 얼마인가요?",
+        "hardware_info": "GPU 한 장의 메모리를 선택하세요. 분산 학습이 구성된 경우에만 멀티 GPU를 선택하세요.",
+        "hardware_choices": (
+            ("8 GB 이하", "low"),
+            ("12–16 GB", "mid"),
+            ("24–48 GB", "high"),
+            ("멀티 GPU / 80 GB 이상", "multi"),
+        ),
+        "model_size_label": "모델 크기는 얼마인가요?",
+        "model_size_info": "모델 이름이나 문서에 표시된 파라미터 수를 사용하세요.",
+        "model_size_choices": (
+            ("3B 이하", "small"),
+            ("7B–8B", "medium"),
+            ("13B–34B", "large"),
+            ("70B 이상", "xlarge"),
+        ),
+        "priority_label": "이번 학습에서 무엇을 우선할까요?",
+        "priority_info": "첫 실행에는 균형 및 안정 모드를 권장합니다.",
+        "params_guide": "### 변경할 항목만 선택하세요\n권장 구성이 이미 완성되었습니다. 하나의 분기를 선택하면 관련 없는 파라미터는 숨겨집니다.",
+        "param_mode_label": "무엇을 조정할까요?",
+        "param_mode_info": "앞에서 선택한 우선순위에 따라 권장 분기가 자동 선택됩니다.",
+        "param_mode_choices": (
+            ("변경 없이 권장값 사용", "recommended"),
+            ("GPU 메모리와 학습 속도", "resources"),
+            ("학습 품질과 수렴", "learning"),
+            ("전문가 전체 구성", "expert"),
+        ),
+        "resource_params_guide": "### GPU 메모리와 학습 속도\n최대 메모리와 처리량에 직접 영향을 주는 네 가지 설정만 표시합니다.",
+        "learning_params_guide": "### 학습 품질과 수렴\n인프라 및 전문가 옵션을 노출하지 않고 학습 전략만 조정합니다.",
+        "show_advanced_label": "생성된 파라미터를 수동으로 조정하겠습니다",
+        "show_advanced_info": "선택 사항입니다. 켜면 기술 및 전문가 설정이 표시됩니다.",
+        "priority_choices": (
+            ("균형 및 안정", "balanced"),
+            ("GPU 메모리 절약", "memory"),
+            ("더 빠른 학습", "speed"),
+            ("최고 품질", "quality"),
+        ),
+        "apply_button": "권장 구성 생성",
+        "manual_settings": "생성된 설정 검토 또는 수동 조정",
+        "result_title": "권장 구성이 적용됨",
+        "result_intro": "선택한 목표와 하드웨어에 맞는 안전한 시작값입니다.",
+        "result_labels": ("방식", "양자화", "정밀도", "시퀀스", "유효 배치", "분산 학습"),
+        "none": "없음",
+        "tokens": "{value} 토큰",
+        "effective_batch": "{value} 샘플",
+        "reason_balanced": "균형 모드는 메모리 사용량을 예측 가능하게 유지하면서 학습 안정성을 보존합니다.",
+        "reason_memory": "메모리 절약 모드는 배치를 줄이고 지원되는 경우 4비트 로딩을 사용합니다.",
+        "reason_speed": "속도 모드는 선택한 하드웨어에 여유가 있을 때 장치 배치를 늘립니다.",
+        "reason_quality": "품질 모드는 하드웨어가 지원할 때 정밀도와 컨텍스트 길이를 유지합니다.",
+        "result_footer": "고급 파라미터를 바꾸지 않고 계속할 수 있습니다. 예외가 필요할 때만 수동 설정을 여세요.",
+        "error_profile": "계속하기 전에 권장 구성을 생성하세요.",
+        "error_model": "계속하기 전에 모델을 선택하세요.",
+        "error_path": "계속하기 전에 모델 경로나 저장소 ID를 입력하세요.",
+        "error_output": "계속하기 전에 출력 디렉터리를 선택하세요.",
+        "error_dataset": "계속하기 전에 학습 데이터셋을 하나 이상 선택하세요.",
+        "error_learning_rate": "학습률은 0보다 큰 숫자여야 합니다.",
+        "error_epochs": "학습 에포크는 0보다 큰 숫자여야 합니다.",
+        "error_batch": "배치 크기와 그래디언트 누적은 모두 1 이상이어야 합니다.",
+    },
+    "ja": {
+        "questionnaire": "### 何を学習させたいか教えてください\n4つの質問に答えると、安全な初期構成が自動で入力されます。",
+        "goal_label": "モデルに何を学習させますか？",
+        "goal_info": "用途に最も近い結果を選択してください。",
+        "goal_choices": (
+            ("指示に従って質問に答える", "instruction"),
+            ("より良い回答を優先する", "preference"),
+            ("生テキストから継続学習する", "pretrain"),
+        ),
+        "hardware_label": "利用可能な GPU メモリは？",
+        "hardware_info": "GPU 1枚のメモリを選択してください。分散学習を構成済みの場合だけマルチ GPU を選びます。",
+        "hardware_choices": (
+            ("8 GB 以下", "low"),
+            ("12–16 GB", "mid"),
+            ("24–48 GB", "high"),
+            ("マルチ GPU / 80 GB 以上", "multi"),
+        ),
+        "model_size_label": "モデルの規模は？",
+        "model_size_info": "モデル名またはドキュメントのパラメータ数を参照してください。",
+        "model_size_choices": (
+            ("3B 以下", "small"),
+            ("7B–8B", "medium"),
+            ("13B–34B", "large"),
+            ("70B 以上", "xlarge"),
+        ),
+        "priority_label": "今回の学習で何を優先しますか？",
+        "priority_info": "初回はバランスと安定性を推奨します。",
+        "params_guide": "### 変更したい項目だけ選択してください\n推奨構成は完成済みです。1つの分岐を選ぶと、関係のないパラメータは非表示になります。",
+        "param_mode_label": "何を調整しますか？",
+        "param_mode_info": "前に選択した優先事項に応じて推奨分岐が自動選択されます。",
+        "param_mode_choices": (
+            ("変更せず推奨値を使用", "recommended"),
+            ("GPU メモリと学習速度", "resources"),
+            ("学習品質と収束", "learning"),
+            ("エキスパート構成", "expert"),
+        ),
+        "resource_params_guide": "### GPU メモリと学習速度\nピークメモリとスループットに直接影響する4項目だけを表示します。",
+        "learning_params_guide": "### 学習品質と収束\nインフラやエキスパート設定を表示せずに学習戦略だけを調整します。",
+        "show_advanced_label": "生成されたパラメータを手動で調整する",
+        "show_advanced_info": "任意です。有効にすると技術設定とエキスパート設定が表示されます。",
+        "priority_choices": (
+            ("バランスと安定性", "balanced"),
+            ("GPU メモリを節約", "memory"),
+            ("より高速に学習", "speed"),
+            ("最高品質", "quality"),
+        ),
+        "apply_button": "推奨構成を生成",
+        "manual_settings": "生成された設定を確認または手動調整",
+        "result_title": "推奨構成を適用しました",
+        "result_intro": "選択した目的とハードウェアに合う安全な初期値です。",
+        "result_labels": ("方式", "量子化", "精度", "シーケンス", "有効バッチ", "分散学習"),
+        "none": "なし",
+        "tokens": "{value} トークン",
+        "effective_batch": "{value} サンプル",
+        "reason_balanced": "バランスモードはメモリ使用量を予測可能にしながら学習の安定性を維持します。",
+        "reason_memory": "省メモリモードはバッチを小さくし、対応時は4ビット読み込みを使用します。",
+        "reason_speed": "速度モードは選択したハードウェアに余裕がある場合、デバイスバッチを増やします。",
+        "reason_quality": "品質モードはハードウェアが対応できる場合、精度とコンテキスト長を維持します。",
+        "result_footer": "高度なパラメータを変更せずに続行できます。例外が必要な場合だけ手動設定を開いてください。",
+        "error_profile": "続行する前に推奨構成を生成してください。",
+        "error_model": "続行する前にモデルを選択してください。",
+        "error_path": "続行する前にモデルパスまたはリポジトリ ID を入力してください。",
+        "error_output": "続行する前に出力先を選択してください。",
+        "error_dataset": "続行する前に学習データセットを1つ以上選択してください。",
+        "error_learning_rate": "学習率は0より大きい数値である必要があります。",
+        "error_epochs": "学習エポック数は0より大きい数値である必要があります。",
+        "error_batch": "バッチサイズと勾配累積はどちらも1以上である必要があります。",
+    },
+}
+
+
+WIZARD_MEMORY_LOCALES = {
+    "en": {
+        "intro": "### Check VRAM before training\nThe system reads the model configuration and the final training settings, estimates peak VRAM per device, and adds a 10% safety margin.",
+        "check_button": "Check VRAM and continue",
+        "force_ack_label": "I understand that training may fail or become unstable",
+        "force_ack_info": "Required before force-starting with insufficient or uncertain VRAM.",
+        "force_button": "Force training",
+        "cancel_button": "Go back and adjust settings",
+        "titles": {
+            "safe": "VRAM check passed",
+            "below": "VRAM is below the recommended value",
+            "insufficient": "VRAM is insufficient",
+            "uncertain": "VRAM safety could not be verified",
+        },
+        "descriptions": {
+            "safe": "The currently free VRAM meets the estimate plus the 10% safety margin. Review the figures, then start training.",
+            "below": "The model may fit the raw estimate, but the 10% safety margin is not available. Training is not recommended.",
+            "insufficient": "Currently free VRAM is below the estimated peak. Training is not recommended.",
+            "uncertain": "The system could not verify the model configuration or available accelerator memory. Training is not recommended without manual verification.",
+        },
+        "labels": (
+            "Model parameters",
+            "Estimated peak",
+            "Recommended with 10% margin",
+            "Free / total VRAM",
+            "Devices",
+            "Estimate basis",
+        ),
+        "config_source": "Model config + training config",
+        "profile_source": "Model-size fallback + training config",
+        "unknown": "Not detected",
+        "risk_title": "Force training despite the VRAM warning?",
+        "risk_body": "The safety check does not recommend starting with the current configuration. A forced run can fail with an out-of-memory error, interrupt work, or leave incomplete output.",
+        "risk_action": "Adjust quantization, batch size, sequence length, finetuning method, or DeepSpeed settings and run the check again.",
+    },
+    "ru": {
+        "intro": "### Проверка видеопамяти перед обучением\nСистема читает конфигурацию модели и итоговые параметры обучения, оценивает пик памяти на устройство и добавляет запас 10%.",
+        "check_button": "Проверить видеопамять и продолжить",
+        "force_ack_label": "Я понимаю, что обучение может завершиться ошибкой или работать нестабильно",
+        "force_ack_info": "Обязательно для принудительного запуска при недостаточной или неопределённой памяти.",
+        "force_button": "Запустить принудительно",
+        "cancel_button": "Вернуться и изменить настройки",
+        "titles": {
+            "safe": "Проверка памяти пройдена",
+            "below": "Память ниже рекомендуемого значения",
+            "insufficient": "Недостаточно видеопамяти",
+            "uncertain": "Не удалось подтвердить безопасность памяти",
+        },
+        "descriptions": {
+            "safe": "Свободной видеопамяти достаточно для оценки с запасом 10%. Проверьте значения и запускайте обучение.",
+            "below": "Модель может поместиться по базовой оценке, но запаса 10% нет. Запуск не рекомендуется.",
+            "insufficient": "Свободная видеопамять ниже оценочного пика. Запуск не рекомендуется.",
+            "uncertain": "Не удалось проверить конфигурацию модели или доступную память ускорителя. Без ручной проверки запуск не рекомендуется.",
+        },
+        "labels": (
+            "Параметры модели",
+            "Оценочный пик",
+            "Рекомендация с запасом 10%",
+            "Свободно / всего",
+            "Устройства",
+            "Основа оценки",
+        ),
+        "config_source": "Конфигурация модели и обучения",
+        "profile_source": "Профиль размера модели и конфигурация обучения",
+        "unknown": "Не обнаружено",
+        "risk_title": "Запустить обучение вопреки предупреждению?",
+        "risk_body": "Проверка безопасности не рекомендует запуск с текущей конфигурацией. Принудительный запуск может вызвать ошибку нехватки памяти, прервать работу или оставить неполный результат.",
+        "risk_action": "Измените квантизацию, пакет, длину последовательности, метод дообучения или DeepSpeed и повторите проверку.",
+    },
+    "zh": {
+        "intro": "### 训练前检查显存\n系统会读取模型配置和最终训练配置，估算每张设备的峰值显存，并额外保留 10% 安全余量。",
+        "check_button": "检查显存并继续",
+        "force_ack_label": "我已了解训练可能失败或出现不稳定",
+        "force_ack_info": "显存不足或无法确认时，强制启动前必须勾选。",
+        "force_button": "仍然强制训练",
+        "cancel_button": "返回调整配置",
+        "titles": {
+            "safe": "显存检查通过",
+            "below": "显存低于建议值",
+            "insufficient": "显存不足",
+            "uncertain": "无法确认显存安全性",
+        },
+        "descriptions": {
+            "safe": "当前空闲显存满足峰值估算及额外 10% 安全余量。确认数值后即可开始训练。",
+            "below": "当前显存可能达到基础估算值，但未达到额外保留 10% 后的建议值，因此不建议训练。",
+            "insufficient": "当前空闲显存低于预计峰值，因此不建议训练。",
+            "uncertain": "系统无法确认模型配置或可用加速设备显存。未经人工核对，不建议训练。",
+        },
+        "labels": ("模型参数量", "预计峰值", "包含 10% 余量的建议值", "空闲 / 总显存", "设备数量", "估算依据"),
+        "config_source": "模型配置 + 训练配置",
+        "profile_source": "模型规模备用值 + 训练配置",
+        "unknown": "未检测到",
+        "risk_title": "确定忽略显存警告并强制训练吗？",
+        "risk_body": "安全检查不建议使用当前配置启动。强制训练可能发生显存溢出、任务中断，或留下不完整的输出结果。",
+        "risk_action": "建议调整量化、批处理大小、序列长度、微调方法或 DeepSpeed 设置，然后重新检查。",
+    },
+    "ko": {
+        "intro": "### 학습 전 GPU 메모리 확인\n시스템이 모델 구성과 최종 학습 설정을 읽고 장치당 최대 메모리를 추정한 뒤 10% 안전 여유를 추가합니다.",
+        "check_button": "GPU 메모리 확인 후 계속",
+        "force_ack_label": "학습이 실패하거나 불안정할 수 있음을 이해했습니다",
+        "force_ack_info": "메모리가 부족하거나 불확실한 상태에서 강제 시작하려면 필요합니다.",
+        "force_button": "강제로 학습 시작",
+        "cancel_button": "돌아가서 설정 조정",
+        "titles": {
+            "safe": "GPU 메모리 확인 통과",
+            "below": "GPU 메모리가 권장값보다 낮음",
+            "insufficient": "GPU 메모리 부족",
+            "uncertain": "GPU 메모리 안전성을 확인할 수 없음",
+        },
+        "descriptions": {
+            "safe": "현재 여유 메모리가 추정치와 10% 안전 여유를 충족합니다. 값을 검토한 뒤 학습을 시작하세요.",
+            "below": "기본 추정치에는 맞을 수 있지만 10% 안전 여유가 없습니다. 학습을 권장하지 않습니다.",
+            "insufficient": "현재 여유 메모리가 예상 최대치보다 낮습니다. 학습을 권장하지 않습니다.",
+            "uncertain": "모델 구성 또는 사용 가능한 가속기 메모리를 확인할 수 없습니다. 수동 확인 없이는 학습을 권장하지 않습니다.",
+        },
+        "labels": ("모델 파라미터", "예상 최대치", "10% 여유 포함 권장값", "여유 / 전체 메모리", "장치", "추정 기준"),
+        "config_source": "모델 구성 + 학습 구성",
+        "profile_source": "모델 크기 대체값 + 학습 구성",
+        "unknown": "감지되지 않음",
+        "risk_title": "GPU 메모리 경고를 무시하고 강제 학습할까요?",
+        "risk_body": "안전 확인 결과 현재 구성으로 시작하는 것을 권장하지 않습니다. 강제 실행 시 메모리 부족 오류, 작업 중단 또는 불완전한 출력이 발생할 수 있습니다.",
+        "risk_action": "양자화, 배치 크기, 시퀀스 길이, 미세 조정 방식 또는 DeepSpeed 설정을 조정하고 다시 확인하세요.",
+    },
+    "ja": {
+        "intro": "### 学習前に GPU メモリを確認\nモデル構成と最終学習設定を読み取り、デバイスごとのピークを推定して10%の安全余裕を追加します。",
+        "check_button": "GPU メモリを確認して続行",
+        "force_ack_label": "学習が失敗または不安定になる可能性を理解しました",
+        "force_ack_info": "メモリ不足または不確実な状態で強制開始する場合に必要です。",
+        "force_button": "強制的に学習を開始",
+        "cancel_button": "戻って設定を調整",
+        "titles": {
+            "safe": "GPU メモリ確認に合格",
+            "below": "GPU メモリが推奨値未満",
+            "insufficient": "GPU メモリ不足",
+            "uncertain": "GPU メモリの安全性を確認できません",
+        },
+        "descriptions": {
+            "safe": "現在の空きメモリは推定値と10%の安全余裕を満たしています。数値を確認して学習を開始してください。",
+            "below": "基本推定値には収まる可能性がありますが、10%の安全余裕がありません。学習は推奨されません。",
+            "insufficient": "現在の空きメモリは推定ピーク未満です。学習は推奨されません。",
+            "uncertain": "モデル構成または利用可能なアクセラレータメモリを確認できません。手動確認なしの学習は推奨されません。",
+        },
+        "labels": ("モデルパラメータ", "推定ピーク", "10%余裕込み推奨値", "空き / 総メモリ", "デバイス", "推定根拠"),
+        "config_source": "モデル構成 + 学習構成",
+        "profile_source": "モデルサイズ代替値 + 学習構成",
+        "unknown": "未検出",
+        "risk_title": "GPU メモリ警告を無視して強制学習しますか？",
+        "risk_body": "安全確認では現在の構成での開始を推奨していません。強制実行するとメモリ不足、処理中断、不完全な出力が発生する可能性があります。",
+        "risk_action": "量子化、バッチサイズ、シーケンス長、微調整方式、DeepSpeed 設定を調整して再確認してください。",
+    },
+}
+
+
+LOCALES.update(
+    {
+        "wizard_questionnaire": {
+            lang: {"value": text["questionnaire"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_goal": {
+            lang: {"label": text["goal_label"], "info": text["goal_info"], "choices": text["goal_choices"]}
+            for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_hardware": {
+            lang: {"label": text["hardware_label"], "info": text["hardware_info"], "choices": text["hardware_choices"]}
+            for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_model_size": {
+            lang: {
+                "label": text["model_size_label"],
+                "info": text["model_size_info"],
+                "choices": text["model_size_choices"],
+            }
+            for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_priority": {
+            lang: {"label": text["priority_label"], "info": text["priority_info"], "choices": text["priority_choices"]}
+            for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_apply_profile_btn": {
+            lang: {"value": text["apply_button"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_params_guide": {
+            lang: {"value": text["params_guide"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_param_mode": {
+            lang: {
+                "label": text["param_mode_label"],
+                "info": text["param_mode_info"],
+                "choices": text["param_mode_choices"],
+            }
+            for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_resource_params_guide": {
+            lang: {"value": text["resource_params_guide"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_learning_params_guide": {
+            lang: {"value": text["learning_params_guide"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "manual_settings": {
+            lang: {"label": text["manual_settings"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_memory_intro": {lang: {"value": text["intro"]} for lang, text in WIZARD_MEMORY_LOCALES.items()},
+        "wizard_preflight_btn": {
+            lang: {"value": text["check_button"]} for lang, text in WIZARD_MEMORY_LOCALES.items()
+        },
+        "wizard_force_ack": {
+            lang: {"label": text["force_ack_label"], "info": text["force_ack_info"]}
+            for lang, text in WIZARD_MEMORY_LOCALES.items()
+        },
+        "wizard_force_start_btn": {
+            lang: {"value": text["force_button"]} for lang, text in WIZARD_MEMORY_LOCALES.items()
+        },
+        "wizard_force_cancel_btn": {
+            lang: {"value": text["cancel_button"]} for lang, text in WIZARD_MEMORY_LOCALES.items()
+        },
+    }
+)
+
+
+MERGE_WORKSPACE_LOCALES = {
+    "en": {
+        "train_tab": "Guided Training",
+        "merge_tab": "Adapter Merge",
+        "kicker": "MODEL DELIVERY",
+        "title": "Merge an adapter into its base model",
+        "description": "Create a standalone model artifact for deployment. Source selections are shared with the guided training workflow, so there is no duplicate configuration.",
+        "source": "### 1. Confirm the source\nSelect the base model and adapter in **Guided Training → Step 1**, then return here. The merge uses those selections directly.",
+        "settings": "### 2. Choose the output format\nThe default settings preserve model quality. Enable quantization only when the deployment target requires a smaller artifact.",
+        "destination": "### 3. Set the destination\nChoose a local output directory. A Hub repository ID is optional; advanced JSON arguments should normally remain unchanged.",
+        "advanced_label": "Advanced export arguments",
+        "advanced_info": "Optional JSON overrides for experienced operators. Keep {} for the recommended workflow.",
+        "action": "Merge adapter and export model",
+    },
+    "ru": {
+        "train_tab": "Пошаговое обучение",
+        "merge_tab": "Слияние адаптеров",
+        "kicker": "ПОДГОТОВКА МОДЕЛИ",
+        "title": "Объедините адаптер с базовой моделью",
+        "description": "Создайте самостоятельную модель для развертывания. Исходные параметры общие с пошаговым обучением, поэтому повторная настройка не требуется.",
+        "source": "### 1. Подтвердите источник\nВыберите базовую модель и адаптер в разделе **Пошаговое обучение → Шаг 1**, затем вернитесь сюда. Они будут использованы напрямую.",
+        "settings": "### 2. Выберите формат вывода\nНастройки по умолчанию сохраняют качество модели. Включайте квантование только если для развертывания нужен файл меньшего размера.",
+        "destination": "### 3. Укажите назначение\nВыберите локальный каталог. Идентификатор репозитория Hub необязателен; расширенные аргументы JSON обычно менять не нужно.",
+        "advanced_label": "Расширенные аргументы экспорта",
+        "advanced_info": "Необязательные переопределения JSON для опытных специалистов. Для рекомендуемого процесса оставьте {}.",
+        "action": "Объединить адаптер и экспортировать модель",
+    },
+    "zh": {
+        "train_tab": "引导式训练",
+        "merge_tab": "适配器合并",
+        "kicker": "模型交付",
+        "title": "将适配器合并到基础模型",
+        "description": "生成可直接部署的独立模型。来源配置与引导式训练共用，无需重复填写。",
+        "source": "### 1. 确认来源\n请先在 **引导式训练 → 第 1 步** 选择基础模型和适配器，然后返回本页；合并时会直接读取这些选择。",
+        "settings": "### 2. 选择输出格式\n默认配置可保留模型质量。仅当部署环境需要更小的模型文件时才启用量化。",
+        "destination": "### 3. 设置保存位置\n请选择本地输出目录。Hub 仓库 ID 为可选项；通常无需修改高级 JSON 参数。",
+        "advanced_label": "高级导出参数",
+        "advanced_info": "供有经验的用户以 JSON 覆盖默认值；推荐流程请保持为 {}。",
+        "action": "合并适配器并导出模型",
+    },
+    "ko": {
+        "train_tab": "안내형 학습",
+        "merge_tab": "어댑터 병합",
+        "kicker": "모델 제공",
+        "title": "어댑터를 기본 모델에 병합",
+        "description": "배포 가능한 독립 모델을 만듭니다. 원본 선택은 안내형 학습과 공유되므로 중복 설정이 필요하지 않습니다.",
+        "source": "### 1. 원본 확인\n먼저 **안내형 학습 → 1단계**에서 기본 모델과 어댑터를 선택한 뒤 이 페이지로 돌아오세요. 해당 선택을 그대로 사용합니다.",
+        "settings": "### 2. 출력 형식 선택\n기본 설정은 모델 품질을 유지합니다. 배포 대상에 더 작은 파일이 필요한 경우에만 양자화를 사용하세요.",
+        "destination": "### 3. 저장 위치 설정\n로컬 출력 디렉터리를 선택하세요. Hub 저장소 ID는 선택 사항이며 고급 JSON 인수는 일반적으로 변경할 필요가 없습니다.",
+        "advanced_label": "고급 내보내기 인수",
+        "advanced_info": "숙련된 사용자를 위한 선택적 JSON 재정의입니다. 권장 절차에서는 {}를 유지하세요.",
+        "action": "어댑터 병합 및 모델 내보내기",
+    },
+    "ja": {
+        "train_tab": "ガイド付き学習",
+        "merge_tab": "アダプターマージ",
+        "kicker": "モデルの提供",
+        "title": "アダプターをベースモデルにマージ",
+        "description": "デプロイ可能な単体モデルを作成します。入力設定はガイド付き学習と共有されるため、重複した設定は不要です。",
+        "source": "### 1. 入力元を確認\n先に **ガイド付き学習 → ステップ 1** でベースモデルとアダプターを選択し、このページに戻ってください。その選択が直接使用されます。",
+        "settings": "### 2. 出力形式を選択\n既定の設定ではモデル品質が維持されます。配置先で小さいファイルが必要な場合にのみ量子化を有効にしてください。",
+        "destination": "### 3. 保存先を設定\nローカル出力ディレクトリを選択してください。Hub リポジトリ ID は任意で、高度な JSON 引数は通常変更不要です。",
+        "advanced_label": "高度なエクスポート引数",
+        "advanced_info": "熟練ユーザー向けの任意の JSON 上書きです。推奨フローでは {} のままにしてください。",
+        "action": "アダプターをマージしてモデルをエクスポート",
+    },
+}
+
+
+def _build_merge_hero(lang: str) -> str:
+    text = MERGE_WORKSPACE_LOCALES[lang]
+    return (
+        '<section class="merge-hero">'
+        f'<div class="merge-kicker">{text["kicker"]}</div>'
+        f'<h1>{text["title"]}</h1><p>{text["description"]}</p>'
+        "</section>"
+    )
+
+
+LOCALES.update(
+    {
+        "train_workspace_btn": {
+            lang: {"value": text["train_tab"]} for lang, text in MERGE_WORKSPACE_LOCALES.items()
+        },
+        "merge_workspace_btn": {
+            lang: {"value": text["merge_tab"]} for lang, text in MERGE_WORKSPACE_LOCALES.items()
+        },
+        "merge_hero": {lang: {"value": _build_merge_hero(lang)} for lang in MERGE_WORKSPACE_LOCALES},
+        "merge_source_guide": {
+            lang: {"value": text["source"]} for lang, text in MERGE_WORKSPACE_LOCALES.items()
+        },
+        "merge_settings_guide": {
+            lang: {"value": text["settings"]} for lang, text in MERGE_WORKSPACE_LOCALES.items()
+        },
+        "merge_destination_guide": {
+            lang: {"value": text["destination"]} for lang, text in MERGE_WORKSPACE_LOCALES.items()
+        },
+        "merge_extra_args": {
+            lang: {"label": text["advanced_label"], "info": text["advanced_info"]}
+            for lang, text in MERGE_WORKSPACE_LOCALES.items()
+        },
+        "merge_export_btn": {
+            lang: {"value": text["action"]} for lang, text in MERGE_WORKSPACE_LOCALES.items()
+        },
+    }
+)
 
 
 ALERTS = {

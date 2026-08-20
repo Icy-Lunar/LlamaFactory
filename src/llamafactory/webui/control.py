@@ -104,16 +104,8 @@ def check_template(lang: str, template: str) -> None:
         gr.Warning(ALERTS["warn_no_instruct"][lang])
 
 
-def get_trainer_info(lang: str, output_path: os.PathLike, do_train: bool) -> tuple[str, "gr.Slider", dict[str, Any]]:
-    r"""Get training information for monitor.
-
-    If do_train is True:
-        Inputs: top.lang, train.output_path
-        Outputs: train.output_box, train.progress_bar, train.loss_viewer, train.swanlab_link
-    If do_train is False:
-        Inputs: top.lang, eval.output_path
-        Outputs: eval.output_box, eval.progress_bar, None, None
-    """
+def get_trainer_info(lang: str, output_path: os.PathLike) -> tuple[str, "gr.Slider", dict[str, Any]]:
+    r"""Get training information for the progress monitor."""
     running_log = ""
     running_progress = gr.Slider(visible=False)
     running_info = {}
@@ -141,7 +133,7 @@ def get_trainer_info(lang: str, output_path: os.PathLike, do_train: bool) -> tup
             )
             running_progress = gr.Slider(label=label, value=percentage, visible=True)
 
-            if do_train and is_matplotlib_available():
+            if is_matplotlib_available():
                 running_info["loss_viewer"] = gr.Plot(gen_loss_plot(trainer_log))
 
     swanlab_config_path = os.path.join(output_path, SWANLAB_CONFIG)
