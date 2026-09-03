@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""在 Hugging Face、vLLM 与 SGLang 之上提供统一的同步、异步和流式聊天门面."""
+
 import asyncio
 from collections.abc import AsyncGenerator, Generator
 from threading import Thread
@@ -72,6 +74,8 @@ class ChatModel:
         else:
             raise NotImplementedError(f"Unknown backend: {model_args.infer_backend}")
 
+        # 同步 API 通过 run_coroutine_threadsafe 投递到这个常驻事件循环，
+        # 从而与 vLLM/SGLang 的异步引擎共享同一实现，也避免每次请求反复 asyncio.run。
         self._loop = asyncio.new_event_loop()
         self._thread = Thread(target=_start_background_loop, args=(self._loop,), daemon=True)
         self._thread.start()

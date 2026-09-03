@@ -30,21 +30,12 @@ from ..extras.constants import (
 from ..extras.packages import is_gradio_available, is_matplotlib_available
 from ..extras.ploting import gen_loss_plot
 from ..model import QuantizationMethod
-from .common import DEFAULT_CONFIG_DIR, DEFAULT_DATA_DIR, get_model_path, get_save_dir, get_template, load_dataset_info
+from .common import DEFAULT_CONFIG_DIR, DEFAULT_DATA_DIR, get_save_dir, get_template, load_dataset_info
 from .locales import ALERTS
 
 
 if is_gradio_available():
     import gradio as gr
-
-
-def switch_hub(hub_name: str) -> None:
-    r"""Switch model hub.
-
-    Inputs: top.hub_name
-    """
-    os.environ["USE_MODELSCOPE_HUB"] = "1" if hub_name == "modelscope" else "0"
-    os.environ["USE_OPENMIND_HUB"] = "1" if hub_name == "openmind" else "0"
 
 
 def can_quantize(finetuning_type: str) -> "gr.Dropdown":
@@ -84,13 +75,13 @@ def change_stage(training_stage: str = list(TRAINING_STAGES.keys())[0]) -> tuple
     return [], TRAINING_STAGES[training_stage] == "pt"
 
 
-def get_model_info(model_name: str) -> tuple[str, str]:
-    r"""Get the necessary information of this model.
+def get_local_model_info(model_path: str) -> tuple[str, str]:
+    r"""Infer the display name and conversation template from a local model directory."""
+    if not model_path or not os.path.isdir(os.path.abspath(os.path.expanduser(model_path))):
+        return "", "default"
 
-    Inputs: top.model_name
-    Outputs: top.model_path, top.template
-    """
-    return get_model_path(model_name), get_template(model_name)
+    model_name = os.path.basename(os.path.normpath(model_path))
+    return model_name, get_template(model_name)
 
 
 def check_template(lang: str, template: str) -> None:

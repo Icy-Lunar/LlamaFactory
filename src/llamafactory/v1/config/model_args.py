@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+import os
 from dataclasses import dataclass, field
 
 from ..utils.types import AttentionFunction
@@ -22,8 +22,8 @@ from .arg_utils import ModelClass, PluginConfig, get_plugin_config
 @dataclass
 class ModelArguments:
     model: str = field(
-        default="Qwen/Qwen3-4B-Instruct-2507",
-        metadata={"help": "Path to the model or model identifier from Hugging Face."},
+        default="",
+        metadata={"help": "Path to an existing local directory containing the base model weights."},
     )
     custom_chat_template: str | None = field(
         default=None,
@@ -61,6 +61,11 @@ class ModelArguments:
     )
 
     def __post_init__(self) -> None:
+        model_path = os.path.abspath(os.path.expanduser(self.model)) if self.model else ""
+        if not model_path or not os.path.isdir(model_path):
+            raise ValueError("`model` must be an existing local model directory.")
+
+        self.model = model_path
         supported_flash_attn = [item.value for item in AttentionFunction]
         if self.flash_attn not in supported_flash_attn:
             raise ValueError(

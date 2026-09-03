@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""装载、合并、切分并预处理数据集，最终返回训练器使用的统一 DatasetModule."""
+
 import os
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
@@ -283,7 +285,7 @@ def get_dataset(
     processor: Optional["ProcessorMixin"] = None,
 ) -> "DatasetModule":
     r"""Get the train dataset and optionally gets the evaluation dataset."""
-    # Load tokenized dataset if path exists
+    # tokenized_path 是完整的预处理快照。一旦命中，原始数据集、模板和截断参数都不会再次生效。
     if data_args.tokenized_path is not None:
         if has_tokenized_data(data_args.tokenized_path):
             logger.warning_rank0("Loading dataset from disk will ignore other data arguments.")
@@ -298,7 +300,7 @@ def get_dataset(
         if data_args.streaming:
             raise ValueError("Turn off `streaming` when saving dataset to disk.")
 
-    # Load and preprocess dataset
+    # 在共享文件系统上由全局主进程先生成缓存；节点本地文件系统则允许每台机器各自的 local rank 0 先行。
     with training_args.main_process_first(desc="load dataset", local=(not data_args.data_shared_file_system)):
         dataset = _get_merged_dataset(data_args.dataset, model_args, data_args, training_args, stage)
         eval_dataset = _get_merged_dataset(
@@ -311,7 +313,7 @@ def get_dataset(
         )
 
     with training_args.main_process_first(desc="pre-process dataset", local=(not data_args.data_shared_file_system)):
-        # move front to make sure eval_dataset(if contain or split) can preprocessed appropriately
+        # 先拆分再 tokenize，才能确保从训练集切出的验证集也使用 is_eval=True 的生成/标签规则。
         train_dict, eval_dict = split_dataset(dataset, eval_dataset, data_args, seed=training_args.seed)
 
         if "train" in train_dict:

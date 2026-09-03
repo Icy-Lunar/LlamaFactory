@@ -15,11 +15,10 @@
 from typing import TYPE_CHECKING
 
 from ...data import TEMPLATES
-from ...extras.constants import METHODS, SUPPORTED_MODELS
-from ...extras.misc import use_modelscope, use_openmind
+from ...extras.constants import METHODS
 from ...extras.packages import is_gradio_available
 from ..common import save_config
-from ..control import can_quantize, can_quantize_to, check_template, get_model_info, list_checkpoints, switch_hub
+from ..control import can_quantize, can_quantize_to, check_template, get_local_model_info, list_checkpoints
 from ..locales import LOCALES
 
 
@@ -32,15 +31,12 @@ if TYPE_CHECKING:
 
 
 def create_top() -> dict[str, "Component"]:
-    with gr.Row():
-        lang = gr.Dropdown(choices=["en", "ru", "zh", "ko", "ja"], value=None, scale=1)
+    with gr.Row(elem_classes="compact-language-row"):
+        lang = gr.Dropdown(choices=["en", "ru", "zh", "ko", "ja"], value="zh", scale=1)
 
     with gr.Row():
-        available_models = list(SUPPORTED_MODELS.keys()) + ["Custom"]
-        model_name = gr.Dropdown(choices=available_models, value=None, scale=2)
-        model_path = gr.Textbox(scale=2)
-        default_hub = "modelscope" if use_modelscope() else "openmind" if use_openmind() else "huggingface"
-        hub_name = gr.Dropdown(choices=["huggingface", "modelscope", "openmind"], value=default_hub, scale=2)
+        model_name = gr.Textbox(visible=False, interactive=False)
+        model_path = gr.Textbox(scale=1)
 
     with gr.Accordion(LOCALES["manual_settings"]["en"]["label"], open=False) as manual_settings:
         with gr.Row():
@@ -54,29 +50,21 @@ def create_top() -> dict[str, "Component"]:
             rope_scaling = gr.Dropdown(choices=["none", "linear", "dynamic", "yarn", "llama3"], value="none")
             booster = gr.Dropdown(choices=["liger_kernel", "flashattn2", "unsloth"], value="liger_kernel")
 
-    model_name.change(get_model_info, [model_name], [model_path, template], queue=False).then(
-        list_checkpoints, [model_name, finetuning_type], [checkpoint_path], queue=False
-    ).then(check_template, [lang, template])
-    model_name.input(save_config, inputs=[lang, hub_name, model_name], queue=False)
-    model_path.input(save_config, inputs=[lang, hub_name, model_name, model_path], queue=False)
+    model_path.input(get_local_model_info, [model_path], [model_name, template], queue=False).then(
+        save_config, inputs=[lang, model_name, model_path], queue=False
+    ).then(list_checkpoints, [model_name, finetuning_type], [checkpoint_path], queue=False).then(
+        check_template, [lang, template]
+    )
     finetuning_type.change(can_quantize, [finetuning_type], [quantization_bit], queue=False).then(
         list_checkpoints, [model_name, finetuning_type], [checkpoint_path], queue=False
     )
     checkpoint_path.focus(list_checkpoints, [model_name, finetuning_type], [checkpoint_path], queue=False)
     quantization_method.change(can_quantize_to, [quantization_method], [quantization_bit], queue=False)
-    hub_name.change(switch_hub, inputs=[hub_name], queue=False).then(
-        get_model_info, [model_name], [model_path, template], queue=False
-    ).then(list_checkpoints, [model_name, finetuning_type], [checkpoint_path], queue=False).then(
-        check_template, [lang, template]
-    )
-    hub_name.input(save_config, inputs=[lang, hub_name], queue=False)
-
     return dict(
         lang=lang,
         manual_settings=manual_settings,
         model_name=model_name,
         model_path=model_path,
-        hub_name=hub_name,
         finetuning_type=finetuning_type,
         checkpoint_path=checkpoint_path,
         quantization_bit=quantization_bit,

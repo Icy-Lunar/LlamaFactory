@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""将已编码样本整理成模型批次，并处理 padding、packing、4D mask 与多模态张量对齐."""
+
 import copy
 import inspect
 from dataclasses import dataclass
@@ -127,6 +129,8 @@ def prepare_4d_attention_mask(attention_mask_with_indices: "torch.Tensor", dtype
     indices_t = attention_mask_with_indices.unsqueeze(1).unsqueeze(3)  # [bsz, 1, seq_len, 1]
     # Create a lower triangular mask.
     tril_mask = torch.tril(torch.ones((seq_len, seq_len), dtype=torch.bool))
+    # 三个条件分别保证“同一 packed 子序列”“不是 padding”“只能看见当前位置及过去”。
+    # 输出采用加性 mask：可见位置为 0，不可见位置为 dtype 最小值，便于直接加到 attention logits。
     attention_mask_4d = (indices == indices_t) & non_padding_mask & tril_mask
     # Invert the attention mask.
     attention_mask_4d = torch.where(attention_mask_4d, zero_tensor, min_dtype)

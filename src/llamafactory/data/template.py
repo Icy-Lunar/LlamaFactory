@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""定义提示模板协议和模型族注册表，负责消息编码、停止符与工具调用格式衔接."""
+
 import re
 from copy import deepcopy
 from dataclasses import dataclass

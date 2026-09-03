@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Route v0 training commands and restart distributed jobs with torchrun when required."""
+
 import os
 import subprocess
 import sys
@@ -24,7 +26,7 @@ USAGE = (
     + "| Usage:                                                             |\n"
     + "|   llamafactory-cli export -h: merge LoRA adapters and export model |\n"
     + "|   llamafactory-cli train -h: train models                          |\n"
-    + "|   llamafactory-cli webui: launch LlamaBoard                        |\n"
+    + "|   llamafactory-cli webui: launch Cyrene Yield guided training      |\n"
     + "|   llamafactory-cli env: show environment info                      |\n"
     + "|   llamafactory-cli version: show version info                      |\n"
     + "| Hint: You can use `lmf` as a shortcut for `llamafactory-cli`.      |\n"
@@ -38,22 +40,22 @@ def launch():
     from .extras.misc import find_available_port, get_device_count, is_env_enabled, use_kt, use_ray
 
     logger = logging.get_logger(__name__)
-    WELCOME = (
-        "-" * 58
-        + "\n"
-        + f"| Welcome to LLaMA Factory, version {VERSION}"
-        + " " * (21 - len(VERSION))
-        + "|\n|"
-        + " " * 56
-        + "|\n"
-        + "| Project page: https://github.com/hiyouga/LLaMA-Factory |\n"
-        + "-" * 58
+    welcome_lines = (
+        f"Cyrene Yield Training, version {VERSION}",
+        "",
+        "Project page: https://github.com/DoHorizon-AI/Cyrene-Yield",
+    )
+    welcome_width = max(len(line) for line in welcome_lines) + 4
+    WELCOME = "\n".join(
+        ["-" * welcome_width, *(f"| {line:<{welcome_width - 4}} |" for line in welcome_lines), "-" * welcome_width]
     )
 
     command = sys.argv.pop(1) if len(sys.argv) > 1 else "help"
     if is_env_enabled("USE_MCA") or is_env_enabled("USE_MEGATRON_BRIDGE"):  # force use torchrun
         os.environ["FORCE_TORCHRUN"] = "1"
 
+    # The parent process only builds the torchrun command and re-executes this entry point.
+    # Model and dataset initialization stays in workers so each rank avoids inherited duplicate state.
     if command == "train" and (
         is_env_enabled("FORCE_TORCHRUN") or (get_device_count() > 1 and not use_ray() and not use_kt())
     ):

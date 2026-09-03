@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""配置 full、freeze、LoRA 或 OFT 微调，并处理量化、恢复训练和参数精度约束."""
+
 import re
 from typing import TYPE_CHECKING
 
@@ -320,6 +322,8 @@ def init_adapter(
         if finetuning_args.pissa_init:
             raise ValueError("Cannot initialize PiSSA adapter on quantized models.")
 
+    # 这里只提升“可训练参数”的精度，冻结的量化/半精度基座保持原 dtype，避免 QLoRA 显存退化。
+    # ZeRO-3 已把可训练主权重维护为 fp32，而 pure_bf16/BAdam 有自己的精度假设，因此不能重复转换。
     # cast trainable parameters to float32 if:
     # 1. is_trainable and not pure_bf16 and not badam and quantization_bit is not None (qlora)
     # 2. is_trainable and not pure_bf16 and not badam and not zero3 (zero3 already in fp32)

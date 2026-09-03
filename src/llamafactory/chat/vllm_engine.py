@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""把统一聊天请求转换为 vLLM 异步引擎输入，并还原生成结果与结束原因."""
+
 import uuid
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import TYPE_CHECKING, Any, Optional, Union

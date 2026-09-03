@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""基于 Transformers generate 实现本地聊天、流式生成和奖励打分."""
+
 import asyncio
 import os
 from collections.abc import AsyncGenerator, Callable

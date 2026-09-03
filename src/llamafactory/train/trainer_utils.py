@@ -17,6 +17,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""训练器共享工具：构造参考/奖励模型、优化器、调度器、自定义损失与 Ray 资源."""
+
 import json
 import os
 from collections.abc import Callable, Mapping
@@ -529,6 +531,7 @@ def create_custom_optimizer(
     training_args: "TrainingArguments",
     finetuning_args: "FinetuningArguments",
 ) -> Optional["torch.optim.Optimizer"]:
+    # 这些优化器扩展互斥；优先级与参数校验保持一致。全部未开启时返回 None，让 Trainer 创建默认 AdamW。
     if finetuning_args.use_galore:
         return _create_galore_optimizer(model, training_args, finetuning_args)
 

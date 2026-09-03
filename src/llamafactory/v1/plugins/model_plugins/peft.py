@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""v1 的 PEFT 插件：选择可训练模块，并负责 LoRA/冻结模型的装载、合并与导出."""
+
 import re
 from dataclasses import dataclass, field
 from typing import Literal
@@ -132,6 +134,8 @@ def load_adapter(model: HFModel, adapter_name_or_path: list[str] | str, is_train
             "Please merge multiple adapters before starting a new LoRA adapter."
         )
 
+    # 训练模式保留一个可训练 adapter 以继续其优化器轨迹；推理模式把所有 adapter 依次合入基座，
+    # 返回不依赖 PEFT 运行时的普通模型。多 adapter 训练因语义不明确而在上方显式拒绝。
     if is_train:
         adapter_to_merge = []
         adapter_to_resume = adapter_name_or_path[0]

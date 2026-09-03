@@ -47,18 +47,16 @@ def create_ui(demo_mode: bool = False) -> "gr.Blocks":
     engine = Engine(demo_mode=demo_mode)
     hostname = os.getenv("HOSTNAME", os.getenv("COMPUTERNAME", platform.node())).split(".")[0]
 
-    with gr.Blocks(title=f"LLaMA Factory ({hostname})", css=CSS) as demo:
-        title = gr.HTML()
-        subtitle = gr.HTML()
+    with gr.Blocks(title=f"Cyrene Yield Training ({hostname})", css=CSS) as demo:
+        title = gr.HTML(elem_classes="product-title")
+        subtitle = gr.HTML(elem_classes="product-subtitle")
         if demo_mode:
             gr.DuplicateButton(value="Duplicate Space for private use", elem_classes="duplicate-button")
 
         engine.manager.add_elems("head", {"title": title, "subtitle": subtitle})
 
         with gr.Row(elem_classes="enterprise-workspace-nav"):
-            train_workspace_btn = gr.Button(
-                LOCALES["train_workspace_btn"]["en"]["value"], variant="primary"
-            )
+            train_workspace_btn = gr.Button(LOCALES["train_workspace_btn"]["en"]["value"], variant="primary")
             if not demo_mode:
                 merge_workspace_btn = gr.Button(LOCALES["merge_workspace_btn"]["en"]["value"])
 

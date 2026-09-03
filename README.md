@@ -1,3 +1,5 @@
+> **Cyrene Yield training edition:** the WebUI now provides local-only, four-step guided training, preflight VRAM estimation, and adapter merge. See the [current behavior and differences from upstream](docs/CYRENE_YIELD_WEBUI.md).
+
 ![# LlamaFactory](assets/logo.png)
 
 [![GitHub Repo stars](https://img.shields.io/github/stars/hiyouga/LlamaFactory?style=social)](https://github.com/hiyouga/LlamaFactory/stargazers)

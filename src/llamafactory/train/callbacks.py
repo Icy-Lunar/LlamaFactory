@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""训练生命周期回调：日志、附属文件保存、Profiler、PiSSA 转换和实验报告."""
+
 import fnmatch
 import json
 import os

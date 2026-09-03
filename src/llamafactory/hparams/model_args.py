@@ -37,9 +37,7 @@ class BaseModelArguments:
 
     model_name_or_path: str | None = field(
         default=None,
-        metadata={
-            "help": "Path to the model weight or identifier from huggingface.co/models or modelscope.cn/models."
-        },
+        metadata={"help": "Path to an existing local directory containing the base model weights."},
     )
     adapter_name_or_path: str | None = field(
         default=None,

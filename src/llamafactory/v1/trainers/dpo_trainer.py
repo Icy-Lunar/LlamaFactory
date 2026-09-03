@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""v1 DPO 训练器：计算策略/参考 log-prob、偏好损失、奖励和训练指标."""
 
 import copy
 import os

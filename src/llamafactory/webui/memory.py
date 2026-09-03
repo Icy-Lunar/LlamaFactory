@@ -12,19 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Estimate per-device training memory from local model weights and training settings."""
+
 import json
-import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-from transformers.utils import CONFIG_NAME, cached_file
+from transformers.utils import CONFIG_NAME
 
 from ..extras.misc import get_current_memory, get_device_count, get_torch_device
 
 
 GIB = 1024**3
 SAFETY_MARGIN = 1.10
+WEIGHT_INDEX_NAMES = ("model.safetensors.index.json", "pytorch_model.bin.index.json")
+WEIGHT_SUFFIX_GROUPS = ((".safetensors",), (".bin",), (".pt", ".pth"))
+IGNORED_WEIGHT_PREFIXES = ("optimizer", "scheduler", "trainer", "training_args", "rng_state", "scaler")
 
 
 @dataclass(frozen=True)
@@ -37,6 +42,9 @@ class ModelShape:
     num_key_value_heads: int
     intermediate_size: int
     source: str
+    weight_size_bytes: int = 0
+    weight_file_count: int = 0
+    weight_bytes_per_parameter: float = 2.0
     config_error: str | None = None
 
 
@@ -49,6 +57,7 @@ class MemoryEstimate:
     activation_gib: float
     workspace_gib: float
     per_device: bool
+    weight_size_gib: float
 
 
 @dataclass(frozen=True)
@@ -82,43 +91,21 @@ def _parse_parameter_count(value: Any) -> int | None:
     return None
 
 
-def _fallback_parameter_count(profile: str) -> int:
-    return {
-        "small": 3_000_000_000,
-        "medium": 8_000_000_000,
-        "large": 24_000_000_000,
-        "xlarge": 70_000_000_000,
-    }.get(profile, 8_000_000_000)
+def resolve_local_model_dir(model_path: str) -> Path:
+    if not model_path or not model_path.strip():
+        raise ValueError("A local model directory is required.")
+
+    model_dir = Path(model_path).expanduser().resolve()
+    if not model_dir.is_dir():
+        raise ValueError("The model path must be an existing local directory.")
+
+    return model_dir
 
 
-def _fallback_shape(profile: str, config_error: str | None = None) -> ModelShape:
-    shapes = {
-        "small": (3_000_000_000, 3072, 28, 32000, 24, 8, 8192),
-        "medium": (8_000_000_000, 4096, 32, 128000, 32, 8, 14336),
-        "large": (24_000_000_000, 5120, 60, 128000, 40, 8, 13824),
-        "xlarge": (70_000_000_000, 8192, 80, 128000, 64, 8, 28672),
-    }
-    params, hidden, layers, vocab, heads, kv_heads, intermediate = shapes.get(profile, shapes["medium"])
-    return ModelShape(
-        parameter_count=params,
-        hidden_size=hidden,
-        num_hidden_layers=layers,
-        vocab_size=vocab,
-        num_attention_heads=heads,
-        num_key_value_heads=kv_heads,
-        intermediate_size=intermediate,
-        source="profile",
-        config_error=config_error,
-    )
-
-
-def _load_config_dict(model_path: str) -> dict[str, Any]:
-    if os.path.isfile(model_path):
-        config_path = model_path
-    elif os.path.isdir(model_path):
-        config_path = os.path.join(model_path, CONFIG_NAME)
-    else:
-        config_path = cached_file(model_path, CONFIG_NAME)
+def _load_config_dict(model_dir: Path) -> dict[str, Any]:
+    config_path = model_dir / CONFIG_NAME
+    if not config_path.is_file():
+        raise ValueError(f"Missing {CONFIG_NAME} in the local model directory.")
 
     with open(config_path, encoding="utf-8") as config_file:
         config = json.load(config_file)
@@ -127,6 +114,92 @@ def _load_config_dict(model_path: str) -> dict[str, Any]:
         raise ValueError("Model configuration must be a JSON object.")
 
     return config
+
+
+def _read_weight_index(model_dir: Path, index_path: Path) -> list[Path]:
+    with open(index_path, encoding="utf-8") as index_file:
+        index = json.load(index_file)
+
+    weight_map = index.get("weight_map") if isinstance(index, dict) else None
+    if not isinstance(weight_map, dict) or not weight_map:
+        raise ValueError(f"Invalid weight index: {index_path.name}.")
+
+    weight_files = []
+    for relative_name in sorted(set(weight_map.values())):
+        if not isinstance(relative_name, str):
+            raise ValueError(f"Invalid weight file entry in {index_path.name}.")
+
+        weight_path = (model_dir / relative_name).resolve()
+        try:
+            weight_path.relative_to(model_dir)
+        except ValueError as err:
+            raise ValueError(f"Weight index points outside the model directory: {relative_name}.") from err
+
+        if not weight_path.is_file():
+            raise ValueError(f"Weight shard listed by the index was not found: {relative_name}.")
+
+        weight_files.append(weight_path)
+
+    return weight_files
+
+
+def _scan_weight_files(model_dir: Path) -> list[Path]:
+    for index_name in WEIGHT_INDEX_NAMES:
+        index_path = model_dir / index_name
+        if index_path.is_file():
+            return _read_weight_index(model_dir, index_path)
+
+    candidates: dict[tuple[str, ...], list[Path]] = {suffixes: [] for suffixes in WEIGHT_SUFFIX_GROUPS}
+    for weight_path in model_dir.rglob("*"):
+        relative_parent_parts = weight_path.relative_to(model_dir).parts[:-1]
+        if not weight_path.is_file() or any(part.startswith("checkpoint-") for part in relative_parent_parts):
+            continue
+
+        file_name = weight_path.name.lower()
+        if file_name.startswith(IGNORED_WEIGHT_PREFIXES):
+            continue
+
+        for suffixes in WEIGHT_SUFFIX_GROUPS:
+            if weight_path.suffix.lower() in suffixes:
+                candidates[suffixes].append(weight_path)
+                break
+
+    for suffixes in WEIGHT_SUFFIX_GROUPS:
+        if candidates[suffixes]:
+            return sorted(candidates[suffixes])
+
+    raise ValueError("No supported model weight files were found in the local model directory.")
+
+
+def get_local_weight_size(model_path: str) -> tuple[int, int]:
+    model_dir = resolve_local_model_dir(model_path)
+    weight_files = _scan_weight_files(model_dir)
+    return sum(weight_file.stat().st_size for weight_file in weight_files), len(weight_files)
+
+
+def _weight_bytes_per_parameter(config: dict[str, Any], text_config: dict[str, Any]) -> float:
+    quantization_config = config.get("quantization_config")
+    if isinstance(quantization_config, dict):
+        bits = quantization_config.get("bits")
+        try:
+            parsed_bits = float(bits)
+        except (TypeError, ValueError):
+            parsed_bits = 0.0
+
+        if parsed_bits > 0:
+            return max(0.5, parsed_bits / 8)
+
+    dtype = str(text_config.get("torch_dtype", config.get("torch_dtype", "float16"))).lower()
+    if any(name in dtype for name in ("float64", "double")):
+        return 8.0
+    if any(name in dtype for name in ("float32", "fp32")):
+        return 4.0
+    if any(name in dtype for name in ("float8", "fp8", "int8", "uint8")):
+        return 1.0
+    if any(name in dtype for name in ("int4", "nf4", "fp4")):
+        return 0.5
+
+    return 2.0
 
 
 def _estimate_parameter_count(config: dict[str, Any], text_config: dict[str, Any]) -> int:
@@ -171,30 +244,38 @@ def _estimate_parameter_count(config: dict[str, Any], text_config: dict[str, Any
     return int(parameter_count)
 
 
-def read_model_shape(model_path: str, fallback_profile: str) -> ModelShape:
-    try:
-        config = _load_config_dict(model_path)
-        text_config = config.get("text_config") if isinstance(config.get("text_config"), dict) else config
-        hidden_size = _positive_int(text_config.get("hidden_size", text_config.get("n_embd")), 4096)
-        num_layers = _positive_int(text_config.get("num_hidden_layers", text_config.get("n_layer")), 32)
-        vocab_size = _positive_int(text_config.get("vocab_size"), 32000)
-        num_heads = _positive_int(text_config.get("num_attention_heads", text_config.get("n_head")), 32)
-        num_kv_heads = _positive_int(text_config.get("num_key_value_heads"), num_heads)
-        intermediate_size = _positive_int(
-            text_config.get("intermediate_size", text_config.get("n_inner")), 4 * hidden_size
-        )
-        return ModelShape(
-            parameter_count=_estimate_parameter_count(config, text_config),
-            hidden_size=hidden_size,
-            num_hidden_layers=num_layers,
-            vocab_size=vocab_size,
-            num_attention_heads=num_heads,
-            num_key_value_heads=num_kv_heads,
-            intermediate_size=intermediate_size,
-            source="config",
-        )
-    except Exception as err:
-        return _fallback_shape(fallback_profile, config_error=str(err))
+def read_model_shape(model_path: str) -> ModelShape:
+    model_dir = resolve_local_model_dir(model_path)
+    config = _load_config_dict(model_dir)
+    weight_files = _scan_weight_files(model_dir)
+    weight_size_bytes = sum(weight_file.stat().st_size for weight_file in weight_files)
+    if weight_size_bytes <= 0:
+        raise ValueError("The local model weight files are empty.")
+
+    text_config = config.get("text_config") if isinstance(config.get("text_config"), dict) else config
+    hidden_size = _positive_int(text_config.get("hidden_size", text_config.get("n_embd")), 4096)
+    num_layers = _positive_int(text_config.get("num_hidden_layers", text_config.get("n_layer")), 32)
+    vocab_size = _positive_int(text_config.get("vocab_size"), 32000)
+    num_heads = _positive_int(text_config.get("num_attention_heads", text_config.get("n_head")), 32)
+    num_kv_heads = _positive_int(text_config.get("num_key_value_heads"), num_heads)
+    intermediate_size = _positive_int(
+        text_config.get("intermediate_size", text_config.get("n_inner")), 4 * hidden_size
+    )
+    bytes_per_parameter = _weight_bytes_per_parameter(config, text_config)
+    parameter_count = max(1, round(weight_size_bytes / bytes_per_parameter))
+    return ModelShape(
+        parameter_count=parameter_count,
+        hidden_size=hidden_size,
+        num_hidden_layers=num_layers,
+        vocab_size=vocab_size,
+        num_attention_heads=num_heads,
+        num_key_value_heads=num_kv_heads,
+        intermediate_size=intermediate_size,
+        source="local_weights",
+        weight_size_bytes=weight_size_bytes,
+        weight_file_count=len(weight_files),
+        weight_bytes_per_parameter=bytes_per_parameter,
+    )
 
 
 def _estimate_lora_parameters(shape: ModelShape, rank: int) -> int:
@@ -223,10 +304,12 @@ def estimate_training_memory(
 ) -> MemoryEstimate:
     devices = max(1, device_count)
     dtype_bytes = 4 if compute_type == "fp32" else 2
-    weight_bytes = 0.65 if quantization_bit == "4" else 1.1 if quantization_bit == "8" else dtype_bytes
-    base_weight_gib = shape.parameter_count * weight_bytes / GIB
+    loaded_bytes_per_parameter = 0.65 if quantization_bit == "4" else 1.1 if quantization_bit == "8" else dtype_bytes
+    base_weight_gib = shape.parameter_count * loaded_bytes_per_parameter / GIB
     zero_stage = int(deepspeed_stage) if deepspeed_stage in {"2", "3"} else 0
 
+    # Persistent memory includes weights, gradients, optimizer states, and fp32 master weights.
+    # ZeRO-2 shards gradients and optimizer states; ZeRO-3 also shards model weights.
     if finetuning_type == "full":
         weight_memory = shape.parameter_count * dtype_bytes / GIB
         gradient_memory = shape.parameter_count * dtype_bytes / GIB
@@ -260,11 +343,13 @@ def estimate_training_memory(
             trainable_states_gib *= 0.35
         persistent_gib = base_on_device + trainable_states_gib
 
+    # Preference optimization may keep reference or reward model weights on the device.
     if stage in {"dpo", "kto"} and finetuning_type == "full":
         persistent_gib += base_weight_gib / devices if zero_stage == 3 else base_weight_gib
     elif stage == "ppo":
         persistent_gib += 1.5 * (base_weight_gib / devices if zero_stage == 3 else base_weight_gib)
 
+    # Activations scale approximately with batch, sequence length, hidden size, and layer count.
     activation_factor = 6.0 if gradient_checkpointing else 18.0
     if booster == "liger_kernel":
         activation_factor *= 0.82
@@ -297,6 +382,7 @@ def estimate_training_memory(
         activation_gib=round(activation_gib, 2),
         workspace_gib=round(workspace_gib, 2),
         per_device=True,
+        weight_size_gib=round(shape.weight_size_bytes / GIB, 2),
     )
 
 

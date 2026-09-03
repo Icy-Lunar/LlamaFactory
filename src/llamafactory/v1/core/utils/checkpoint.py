@@ -282,6 +282,8 @@ class TrainingCheckpointCoordinator:
         if self._dist_name != "deepspeed":
             save_rng_state(ckpt_dir, rank)
 
+        # 所有 rank 的模型、优化器、dataloader 与 RNG 状态都落盘后，rank 0 才写完成标记。
+        # 自动恢复只选择带该标记的目录，从而避开进程中断留下的半成品 checkpoint。
         DistributedInterface().sync()
 
         if rank == 0:
@@ -302,6 +304,7 @@ class TrainingCheckpointCoordinator:
 
         rank = DistributedInterface().get_rank()
 
+        # 先恢复步数/epoch，再恢复各 rank 的数据迭代器和 RNG，下一批数据及随机算子才能与中断前连续。
         metadata = load_metadata(ckpt_dir)
         self._t.global_step = metadata["global_step"]
         self._t._resume_epoch = metadata["epoch"]

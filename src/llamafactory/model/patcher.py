@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""集中修正不同 Transformers 版本和模型架构在配置、forward 与生成接口上的兼容差异."""
+
 from types import MethodType
 from typing import TYPE_CHECKING, Any
 
@@ -444,6 +446,8 @@ def patch_model(
     is_trainable: bool,
     add_valuehead: bool,
 ) -> None:
+    # 某些模型仓库保存了 temperature/top_p，却漏写 do_sample=True。
+    # Transformers 会把这些采样参数视为无效；这里恢复配置本来表达的生成语义。
     gen_config = model.generation_config  # check and fix generation config
     if not gen_config.do_sample and (
         (gen_config.temperature is not None and gen_config.temperature != 1.0)
@@ -474,6 +478,7 @@ def patch_model(
         )
 
     if is_trainable:
+        # 以下 patch 只服务训练图；推理模型保持上游 forward，减少导出和 generate 时的行为差异。
         if getattr(model.config, "model_type", None) == "gemma3n":
             setattr(model_args, "disable_gradient_checkpointing", True)
 

@@ -28,6 +28,23 @@ CSS = r"""
     var(--body-background-fill);
 }
 
+.product-title h1 {
+  margin: 4px 0 0;
+  font-size: clamp(25px, 3vw, 36px);
+  letter-spacing: -0.035em;
+}
+
+.product-subtitle p {
+  margin: 4px 0 12px;
+  color: var(--body-text-color-subdued);
+  font-size: 13px;
+}
+
+.compact-language-row {
+  width: min(100%, 220px);
+  margin-left: auto;
+}
+
 .enterprise-workspace-nav {
   position: sticky;
   z-index: 50;
@@ -114,7 +131,7 @@ CSS = r"""
 
 .oobe-page {
   gap: 16px !important;
-  max-width: 1500px;
+  max-width: 1180px;
   margin-inline: auto;
 }
 
@@ -612,7 +629,7 @@ CSS = r"""
 }
 
 .merge-page {
-  max-width: 1320px;
+  max-width: 1080px;
   margin-inline: auto;
   gap: 16px !important;
 }

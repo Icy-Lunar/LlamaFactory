@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Convert WebUI forms into jobs and manage subprocesses, logs, progress, and cancellation."""
+
 import json
 import os
 from collections.abc import Generator
@@ -85,11 +87,11 @@ class Runner:
         if self.running:
             return ALERTS["err_conflict"][lang]
 
+        if not model_path or not os.path.isdir(os.path.abspath(os.path.expanduser(model_path))):
+            return ALERTS["err_no_path"][lang]
+
         if not model_name:
             return ALERTS["err_no_model"][lang]
-
-        if not model_path:
-            return ALERTS["err_no_path"][lang]
 
         if not dataset:
             return ALERTS["err_no_dataset"][lang]
@@ -330,7 +332,7 @@ class Runner:
     def _build_config_dict(self, data: dict["Component", Any]) -> dict[str, Any]:
         r"""Build a dictionary containing the current training configuration."""
         config_dict = {}
-        skip_ids = ["top.lang", "top.model_path", "train.output_dir", "train.config_path"]
+        skip_ids = ["top.lang", "top.model_path", "train.output_dir"]
         for elem, value in data.items():
             elem_id = self.manager.get_id_by_elem(elem)
             if elem_id not in skip_ids:
@@ -358,6 +360,8 @@ class Runner:
         progress_bar = self.manager.get_elem_by_id("train.progress_bar")
         loss_viewer = self.manager.get_elem_by_id("train.loss_viewer")
         swanlab_link = self.manager.get_elem_by_id("train.swanlab_link")
+        start_btn = self.manager.get_elem_by_id("train.start_btn")
+        stop_btn = self.manager.get_elem_by_id("train.stop_btn")
 
         running_log = ""
         return_code = -1
@@ -372,6 +376,8 @@ class Runner:
                 return_dict = {
                     output_box: running_log,
                     progress_bar: running_progress,
+                    start_btn: gr.Button(visible=False),
+                    stop_btn: gr.Button(visible=True),
                 }
                 if "loss_viewer" in running_info:
                     return_dict[loss_viewer] = running_info["loss_viewer"]
@@ -406,7 +412,12 @@ class Runner:
             finish_log = ALERTS["err_failed"][lang] + f" Exit code: {return_code}\n\n```\n{stderr}\n```\n"
 
         self._finalize(lang, finish_info)
-        return_dict = {output_box: finish_log, progress_bar: gr.Slider(visible=False)}
+        return_dict = {
+            output_box: finish_log,
+            progress_bar: gr.Slider(visible=False),
+            start_btn: gr.Button(visible=True),
+            stop_btn: gr.Button(visible=False),
+        }
         yield return_dict
 
     def save_args(self, data):

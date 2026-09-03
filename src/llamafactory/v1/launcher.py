@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Route v1 training and model-merge commands and initialize distributed workers."""
+
 import os
 import subprocess
 import sys

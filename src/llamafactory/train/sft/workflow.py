@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""编排 SFT 的模板、数据、模型、collator、Trainer、评估与模型保存流程."""
+
 from typing import TYPE_CHECKING, Optional
 
 from ...data import SFTDataCollatorWith4DAttentionMask, get_dataset, get_template_and_fix_tokenizer
@@ -46,6 +48,7 @@ def run_sft(
     generating_args: "GeneratingArguments",
     callbacks: Optional[list["TrainerCallback"]] = None,
 ):
+    # 模板可能补 special token 并修改 padding 约定，所以必须先修正 tokenizer，再载入模型以正确 resize 词表。
     tokenizer_module = load_tokenizer(model_args)
     tokenizer = tokenizer_module["tokenizer"]
     template = get_template_and_fix_tokenizer(tokenizer, data_args)
@@ -59,6 +62,7 @@ def run_sft(
     if getattr(model, "is_quantized", False) and not training_args.do_train:
         setattr(model, "_hf_peft_config_loaded", True)  # hack here: make model compatible with prediction
 
+    # 生成式评估不预计算训练态的多模态 position ids，因此 predict_with_generate 时不把模型交给 collator。
     data_collator = SFTDataCollatorWith4DAttentionMask(
         template=template,
         model=model if not training_args.predict_with_generate else None,
@@ -139,6 +143,7 @@ def run_sft(
 
             plot_loss(training_args.output_dir, keys=keys)
 
+    # batched generate 必须 left-pad，确保每个样本的最后一个有效 token 都位于解码起点。
     if training_args.predict_with_generate:
         tokenizer.padding_side = "left"  # use left-padding in generation
 

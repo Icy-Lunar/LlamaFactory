@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""适配不同多模态模型的占位符、媒体预处理、附加张量和批次对齐规则."""
+
 import inspect
 import math
 import os

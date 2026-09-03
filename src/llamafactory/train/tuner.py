@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""v0 训练总编排器：安装回调，并按训练阶段和分布式后端路由到具体 workflow."""
+
 import os
 import shutil
 from typing import TYPE_CHECKING, Any, Optional
@@ -89,6 +91,7 @@ def _training_function(config: dict[str, Any]) -> None:
 
     callbacks.append(ReporterCallback(model_args, data_args, finetuning_args, generating_args))  # add to last
 
+    # 后端分支必须先于普通 stage 分支：同一个 pt/sft 任务只能由一个训练栈接管，避免重复初始化进程组。
     if finetuning_args.stage in ["pt", "sft"] and finetuning_args.use_hyper_parallel:
         if not is_hyper_parallel_available():
             raise ImportError("hyper_parallel is not installed. Please install it with `pip install hyper_parallel`.")

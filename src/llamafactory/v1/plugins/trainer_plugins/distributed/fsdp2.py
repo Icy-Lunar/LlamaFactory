@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""v1 FSDP2 后端：完成模型分片、meta 权重物化以及分布式检查点读写."""
+
 import copy
 import gc
 import os
@@ -236,6 +238,8 @@ class FSDP2Engine:
             names = ", ".join(cls.__name__ for cls in transformer_layer_cls_to_wrap)
             logger.info(f"Applying per-layer FSDP to: {names}")
 
+        # LoRA 叶子模块可能位于 Transformer block 内；先单独 shard 它们，再 shard 外层 block，
+        # 才能让可训练 adapter 保持独立的参数组和 state-dict 名称。
         if self.is_lora_module_wrap(model):
             lora_modules = []
             for module in model.modules():
@@ -308,6 +312,7 @@ class FSDP2Engine:
         if self.rank == 0:
             logger.info("Materializing sharded model params...")
 
+        # init_on_meta 只有参数形状、没有存储。to_empty 在每个 rank 上分配本地存储，随后再按 shard 写入权重。
         device = get_current_accelerator()
         model.to_empty(device=device)
 
@@ -510,6 +515,8 @@ class FSDP2Engine:
             raise ValueError(f"No checkpoint files found in {hf_model_path}")
 
         param_map = dict(model.named_parameters())
+        # Transformers 5 的权重转换可能需要同时看到多个源 tensor（例如 fuse/split QKV）。
+        # 因此简单重命名可立即复制，转换器输入则延迟收集到所有 checkpoint shard 扫描结束后再执行。
         conversion_ctx = self._try_build_hf_weight_conversion_context(model)
         total_files = len(checkpoint_files)
 

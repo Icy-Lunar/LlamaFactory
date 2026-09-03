@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""把 YAML、JSON、字典或命令行参数转换为强类型配置，并执行跨参数与依赖校验."""
+
 import json
 import os
 import sys
@@ -357,6 +359,8 @@ def get_ray_args(args: dict[str, Any] | list[str] | None = None) -> RayArguments
 
 def get_train_args(args: dict[str, Any] | list[str] | None = None) -> _TRAIN_CLS:
     mb_args = None
+    # MCA 和 Megatron Bridge 扩展了参数 dataclass，必须在通用解析前确定后端，
+    # 否则这些后端专属字段会被 HfArgumentParser 当成未知参数丢弃或拒绝。
     if is_env_enabled("USE_MCA"):
         model_args, data_args, training_args, finetuning_args, generating_args = _parse_train_mca_args(args)
     elif is_env_enabled("USE_MEGATRON_BRIDGE"):
@@ -377,7 +381,7 @@ def get_train_args(args: dict[str, Any] | list[str] | None = None) -> _TRAIN_CLS
     if training_args.should_log:
         _set_transformers_logging()
 
-    # Check arguments
+    # 单个 dataclass 只校验自身字段；这里集中检查跨对象、跨训练阶段的不变量。
     if finetuning_args.stage != "sft":
         if training_args.predict_with_generate:
             raise ValueError("`predict_with_generate` cannot be set as True except SFT.")

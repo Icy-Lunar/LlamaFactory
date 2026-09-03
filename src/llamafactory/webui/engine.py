@@ -46,23 +46,38 @@ class Engine:
     def resume(self):
         r"""Get the initial value of gradio components and restores training status if necessary."""
         user_config = load_config() if not self.demo_mode else {}  # do not use config in demo mode
-        lang = user_config.get("lang") or "en"
-        init_dict = {"top.lang": {"value": lang}}
+        lang = user_config.get("lang") or "zh"
+        init_dict = {"top.lang": {"value": lang, **LOCALES["lang"][lang]}}
         current_time = get_time()
-        hub_name = user_config.get("hub_name") or "huggingface"
-        init_dict["top.hub_name"] = {"value": hub_name}
         init_dict["train.current_time"] = {"value": current_time}
         init_dict["train.output_dir"] = {"value": f"train_{current_time}"}
-        init_dict["train.config_path"] = {"value": f"{current_time}.yaml"}
 
         if user_config.get("last_model", None):
-            init_dict["top.model_name"] = {"value": user_config["last_model"]}
+            init_dict["top.model_name"] = {
+                "value": user_config["last_model"],
+                "visible": False,
+                "interactive": False,
+            }
 
-        yield self._update_component(init_dict)
+        if user_config.get("last_model_path", None):
+            init_dict["top.model_path"] = {
+                "value": user_config["last_model_path"],
+                **LOCALES["model_path"][lang],
+            }
+
+        initial_updates = self.change_lang(lang)
+        initial_updates.update(self._update_component(init_dict))
+        yield initial_updates
 
         if self.runner.running and not self.demo_mode:
             yield {elem: elem.__class__(value=value) for elem, value in self.runner.running_data.items()}
-            yield self._update_component({"train.resume_btn": {"value": True}})
+            yield self._update_component(
+                {
+                    "train.resume_btn": {"value": True},
+                    "train.start_btn": {"visible": False},
+                    "train.stop_btn": {"visible": True},
+                }
+            )
 
     def change_lang(self, lang: str):
         r"""Update the displayed language of gradio components."""

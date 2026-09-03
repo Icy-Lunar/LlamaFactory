@@ -15,7 +15,6 @@
 import json
 import os
 import signal
-from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -27,11 +26,8 @@ from ..extras.constants import (
     DATA_CONFIG,
     DEFAULT_TEMPLATE,
     MULTIMODAL_SUPPORTED_MODELS,
-    SUPPORTED_MODELS,
     TRAINING_ARGS,
-    DownloadSource,
 )
-from ..extras.misc import use_modelscope, use_openmind
 
 
 logger = logging.get_logger(__name__)
@@ -73,53 +69,38 @@ def _get_config_path() -> os.PathLike:
 
 def load_config() -> dict[str, str | dict[str, Any]]:
     r"""Load user config if exists."""
+    defaults = {"lang": None, "last_model": None, "last_model_path": None, "cache_dir": None}
     try:
         with open(_get_config_path(), encoding="utf-8") as f:
-            return safe_load(f)
+            loaded = safe_load(f)
     except Exception:
-        return {"lang": None, "hub_name": None, "last_model": None, "path_dict": {}, "cache_dir": None}
+        return defaults
+
+    if not isinstance(loaded, dict):
+        return defaults
+
+    defaults.update(loaded)
+    if not defaults["last_model_path"] and defaults.get("last_model") and isinstance(defaults.get("path_dict"), dict):
+        defaults["last_model_path"] = defaults["path_dict"].get(defaults["last_model"])
+
+    defaults.pop("hub_name", None)
+    defaults.pop("path_dict", None)
+    return defaults
 
 
-def save_config(
-    lang: str, hub_name: str | None = None, model_name: str | None = None, model_path: str | None = None
-) -> None:
+def save_config(lang: str, model_name: str | None = None, model_path: str | None = None) -> None:
     r"""Save user config."""
     os.makedirs(DEFAULT_CACHE_DIR, exist_ok=True)
     user_config = load_config()
     user_config["lang"] = lang or user_config["lang"]
-    if hub_name:
-        user_config["hub_name"] = hub_name
-
     if model_name:
         user_config["last_model"] = model_name
 
-    if model_name and model_path:
-        user_config["path_dict"][model_name] = model_path
+    if model_path:
+        user_config["last_model_path"] = model_path
 
     with open(_get_config_path(), "w", encoding="utf-8") as f:
         safe_dump(user_config, f)
-
-
-def get_model_path(model_name: str) -> str:
-    r"""Get the model path according to the model name."""
-    user_config = load_config()
-    path_dict: dict[DownloadSource, str] = SUPPORTED_MODELS.get(model_name, defaultdict(str))
-    model_path = user_config["path_dict"].get(model_name, "") or path_dict.get(DownloadSource.DEFAULT, "")
-    if (
-        use_modelscope()
-        and path_dict.get(DownloadSource.MODELSCOPE)
-        and model_path == path_dict.get(DownloadSource.DEFAULT)
-    ):  # replace hf path with ms path
-        model_path = path_dict.get(DownloadSource.MODELSCOPE)
-
-    if (
-        use_openmind()
-        and path_dict.get(DownloadSource.OPENMIND)
-        and model_path == path_dict.get(DownloadSource.DEFAULT)
-    ):  # replace hf path with om path
-        model_path = path_dict.get(DownloadSource.OPENMIND)
-
-    return model_path
 
 
 def get_template(model_name: str) -> str:

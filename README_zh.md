@@ -1,3 +1,5 @@
+> **Cyrene Yield 训练版：** WebUI 现已提供仅本地模型、四步引导式训练、启动前显存估算和适配器合并。请查看[现行说明及相对原版的改进点](docs/CYRENE_YIELD_WEBUI.md)。
+
 ![# LlamaFactory](assets/logo.png)
 
 [![GitHub Repo stars](https://img.shields.io/github/stars/hiyouga/LlamaFactory?style=social)](https://github.com/hiyouga/LlamaFactory/stargazers)

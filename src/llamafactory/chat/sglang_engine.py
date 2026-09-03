@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""把统一聊天请求适配到 SGLang Runtime，维持与其他推理后端一致的返回协议."""
+
 import asyncio
 import atexit
 import json

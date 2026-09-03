@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""v1 批处理策略：支持固定批、动态 token 预算和 padding-free 打包."""
+
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from math import ceil
@@ -59,6 +61,7 @@ class BaseBatcher(ABC):
 
 def _get_dynamic_micro_batch_sizes(samples: list[ModelInput], batch_info: BatchInfo) -> list[int]:
     """Return sample counts for micro batches formed by one padded-token budget."""
+    # 动态 padding 的实际开销由“当前最大序列长度 × 样本数”决定，而不是各样本 token 数之和。
     budget = batch_info["cutoff_len"] * batch_info["micro_batch_size"]
     cutoff_len = batch_info["cutoff_len"]
     sizes = []
@@ -80,6 +83,7 @@ def _get_dynamic_micro_batch_sizes(samples: list[ModelInput], batch_info: BatchI
                 is_complete = True
                 break
 
+        # buffer 尾部不足一个完整 token budget 时先不消费，fill_buffer 会继续取样后重新计算。
         if used == 0 or not is_complete:
             break
 
@@ -140,6 +144,7 @@ def _pack_padding_free_samples(samples: list[ModelInput], cutoff_len: int) -> Ba
                 packed[key] = []
 
             sliced_value = list(value[:sample_len])
+            # 拼接后样本边界在 token 流中相邻；屏蔽每个后续样本的首 token，避免学习跨样本转移。
             if sample_index > 0 and sliced_value:
                 if key == "labels":
                     sliced_value[0] = IGNORE_INDEX
