@@ -1,7 +1,7 @@
 # Cyrene Yield 训练界面：现行说明与改进点
 
-> 更新日期：2026-09-03  
-> 基础项目：LLaMA Factory  
+> 更新日期：2026-09-03
+> 基础项目：LLaMA Factory
 > 集成目标：`Cyrene-Yield/develop/plugins/llama-factory-training`
 
 ## 与原版 LLaMA Factory 的主要差异
