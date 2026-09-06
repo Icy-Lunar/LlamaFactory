@@ -240,7 +240,7 @@ class Runner:
             args["pref_loss"] = get("train.pref_loss")
 
         # multimodal config
-        if model_name in MULTIMODAL_SUPPORTED_MODELS:
+        if get("train.model_is_multimodal") or model_name in MULTIMODAL_SUPPORTED_MODELS:
             args["freeze_vision_tower"] = get("train.freeze_vision_tower")
             args["freeze_multi_modal_projector"] = get("train.freeze_multi_modal_projector")
             args["freeze_language_model"] = get("train.freeze_language_model")
@@ -332,7 +332,7 @@ class Runner:
     def _build_config_dict(self, data: dict["Component", Any]) -> dict[str, Any]:
         r"""Build a dictionary containing the current training configuration."""
         config_dict = {}
-        skip_ids = ["top.lang", "top.model_path", "train.output_dir"]
+        skip_ids = ["top.lang", "top.model_path", "train.output_dir", "train.model_is_multimodal"]
         for elem, value in data.items():
             elem_id = self.manager.get_id_by_elem(elem)
             if elem_id not in skip_ids:

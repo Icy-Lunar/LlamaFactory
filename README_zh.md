@@ -1,4 +1,4 @@
-> **Cyrene Yield 训练版：** WebUI 现已提供仅本地模型、四步引导式训练、启动前显存估算和适配器合并。请查看[现行说明及相对原版的改进点](docs/CYRENE_YIELD_WEBUI.md)。
+> **Cyrene Yield 训练版：** WebUI 提供仅本地模型的四步引导式训练、自选微调与量化、多模态参数、实时及启动前显存估算和适配器合并。请查看[现行说明](docs/CYRENE_YIELD_WEBUI.md)及 [2026-09-06 改进点](docs/WEBUI_IMPROVEMENTS_2026-09-06.md)。
 
 ![# LlamaFactory](assets/logo.png)
 

@@ -1,4 +1,4 @@
-> **Cyrene Yield training edition:** the WebUI now provides local-only, four-step guided training, preflight VRAM estimation, and adapter merge. See the [current behavior and differences from upstream](docs/CYRENE_YIELD_WEBUI.md).
+> **Cyrene Yield training edition:** local-only, four-step guided training with selectable fine-tuning and quantization, multimodal controls, live and preflight VRAM estimates, and adapter merge. See the [current guide](docs/CYRENE_YIELD_WEBUI.md) and [2026-09-06 improvements](docs/WEBUI_IMPROVEMENTS_2026-09-06.md).
 
 ![# LlamaFactory](assets/logo.png)
 

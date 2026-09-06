@@ -46,6 +46,9 @@ class ModelShape:
     weight_file_count: int = 0
     weight_bytes_per_parameter: float = 2.0
     config_error: str | None = None
+    is_multimodal: bool = False
+    vision_hidden_size: int = 0
+    vision_num_hidden_layers: int = 0
 
 
 @dataclass(frozen=True)
@@ -244,6 +247,28 @@ def _estimate_parameter_count(config: dict[str, Any], text_config: dict[str, Any
     return int(parameter_count)
 
 
+def _is_multimodal_config(config: dict[str, Any]) -> bool:
+    if isinstance(config.get("vision_config"), dict):
+        return True
+
+    architectures = config.get("architectures", [])
+    if isinstance(architectures, str):
+        architectures = [architectures]
+    elif not isinstance(architectures, (list, tuple)):
+        architectures = []
+
+    model_identity = " ".join(
+        [
+            str(config.get("model_type", "")),
+            *(str(architecture) for architecture in architectures),
+        ]
+    ).lower()
+    return any(
+        marker in model_identity
+        for marker in ("vision", "visual", "llava", "mllama", "paligemma", "idefics", "internvl", "minicpmv", "_vl")
+    )
+
+
 def read_model_shape(model_path: str) -> ModelShape:
     model_dir = resolve_local_model_dir(model_path)
     config = _load_config_dict(model_dir)
@@ -261,6 +286,8 @@ def read_model_shape(model_path: str) -> ModelShape:
     intermediate_size = _positive_int(
         text_config.get("intermediate_size", text_config.get("n_inner")), 4 * hidden_size
     )
+    vision_config = config.get("vision_config") if isinstance(config.get("vision_config"), dict) else {}
+    is_multimodal = _is_multimodal_config(config)
     bytes_per_parameter = _weight_bytes_per_parameter(config, text_config)
     parameter_count = max(1, round(weight_size_bytes / bytes_per_parameter))
     return ModelShape(
@@ -275,6 +302,9 @@ def read_model_shape(model_path: str) -> ModelShape:
         weight_size_bytes=weight_size_bytes,
         weight_file_count=len(weight_files),
         weight_bytes_per_parameter=bytes_per_parameter,
+        is_multimodal=is_multimodal,
+        vision_hidden_size=_positive_int(vision_config.get("hidden_size"), 1024) if is_multimodal else 0,
+        vision_num_hidden_layers=(_positive_int(vision_config.get("num_hidden_layers"), 24) if is_multimodal else 0),
     )
 
 
@@ -301,6 +331,12 @@ def estimate_training_memory(
     device_count: int,
     booster: str,
     gradient_checkpointing: bool = True,
+    is_multimodal: bool = False,
+    freeze_vision_tower: bool = True,
+    freeze_multi_modal_projector: bool = True,
+    freeze_language_model: bool = False,
+    image_max_pixels: int = 768 * 768,
+    video_max_pixels: int = 256 * 256,
 ) -> MemoryEstimate:
     devices = max(1, device_count)
     dtype_bytes = 4 if compute_type == "fp32" else 2
@@ -312,9 +348,18 @@ def estimate_training_memory(
     # ZeRO-2 shards gradients and optimizer states; ZeRO-3 also shards model weights.
     if finetuning_type == "full":
         weight_memory = shape.parameter_count * dtype_bytes / GIB
-        gradient_memory = shape.parameter_count * dtype_bytes / GIB
-        optimizer_memory = shape.parameter_count * 8 / GIB
-        master_weight_memory = shape.parameter_count * (4 if dtype_bytes < 4 else 0) / GIB
+        trainable_fraction = 1.0
+        if is_multimodal or shape.is_multimodal:
+            trainable_fraction = (
+                (0.84 if not freeze_language_model else 0.0)
+                + (0.15 if not freeze_vision_tower else 0.0)
+                + (0.01 if not freeze_multi_modal_projector else 0.0)
+            )
+
+        trainable_parameters = max(1, int(shape.parameter_count * trainable_fraction))
+        gradient_memory = trainable_parameters * dtype_bytes / GIB
+        optimizer_memory = trainable_parameters * 8 / GIB
+        master_weight_memory = trainable_parameters * (4 if dtype_bytes < 4 else 0) / GIB
         if zero_stage == 3:
             persistent_gib = (weight_memory + gradient_memory + optimizer_memory + master_weight_memory) / devices
         elif zero_stage == 2:
@@ -334,7 +379,16 @@ def estimate_training_memory(
         elif finetuning_type == "oft":
             trainable_parameters = int(shape.parameter_count * 0.004)
         else:
-            trainable_parameters = _estimate_lora_parameters(shape, max(1, lora_rank))
+            base_lora_parameters = _estimate_lora_parameters(shape, max(1, lora_rank))
+            trainable_parameters = base_lora_parameters
+            if is_multimodal or shape.is_multimodal:
+                trainable_parameters = 0 if freeze_language_model else base_lora_parameters
+                if not freeze_vision_tower:
+                    trainable_parameters += int(base_lora_parameters * 0.15)
+                if not freeze_multi_modal_projector:
+                    trainable_parameters += int(base_lora_parameters * 0.01)
+
+                trainable_parameters = max(1, trainable_parameters)
 
         trainable_states_gib = trainable_parameters * 16 / GIB
         if zero_stage >= 2:
@@ -371,6 +425,22 @@ def estimate_training_memory(
     )
     logits_factor = 0.15 if booster == "liger_kernel" else 0.55
     activation_gib += max(1, batch_size) * max(1, cutoff_len) * shape.vocab_size * dtype_bytes * logits_factor / GIB
+    if is_multimodal or shape.is_multimodal:
+        vision_hidden_size = shape.vision_hidden_size or 1024
+        vision_layers = shape.vision_num_hidden_layers or 24
+        image_tokens = max(1, image_max_pixels) / (28 * 28)
+        video_tokens = 4 * max(1, video_max_pixels) / (28 * 28)
+        vision_backward_factor = 2.0 if freeze_vision_tower else 6.0
+        activation_gib += (
+            max(1, batch_size)
+            * (image_tokens + video_tokens)
+            * vision_hidden_size
+            * vision_layers
+            * dtype_bytes
+            * vision_backward_factor
+            / GIB
+        )
+
     workspace_gib = 1.25 + 0.08 * persistent_gib
     estimated_gib = max(1.0, persistent_gib + activation_gib + workspace_gib)
 

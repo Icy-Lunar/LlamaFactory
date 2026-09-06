@@ -3,6 +3,7 @@ import json
 import gradio as gr
 
 from llamafactory.webui.components import train as train_components
+from llamafactory.webui.components.top import create_top
 from llamafactory.webui.components.train import _build_wizard_summary
 from llamafactory.webui.interface import create_ui
 from llamafactory.webui.locales import (
@@ -62,6 +63,33 @@ def test_live_memory_guidance_is_available_for_every_language() -> None:
         assert LOCALES["wizard_live_memory_intro"][lang]["value"] == text["live_intro"]
 
 
+def test_specialized_parameter_guidance_is_available_for_every_language() -> None:
+    keys = (
+        "common_params_label",
+        "common_params_guide",
+        "lora_params_guide",
+        "multimodal_params_guide",
+    )
+    for lang, guidance in WIZARD_GUIDANCE_LOCALES.items():
+        for key in keys:
+            assert guidance[key]
+
+        assert LOCALES["wizard_common_params"][lang]["label"] == guidance["common_params_label"]
+        assert LOCALES["wizard_common_params_guide"][lang]["value"] == guidance["common_params_guide"]
+        assert LOCALES["wizard_lora_params_guide"][lang]["value"] == guidance["lora_params_guide"]
+        assert LOCALES["wizard_multimodal_params_guide"][lang]["value"] == guidance["multimodal_params_guide"]
+
+
+def test_first_step_exposes_method_and_optional_quantization() -> None:
+    with gr.Blocks():
+        top = create_top()
+
+    assert top["finetuning_type"].visible is True
+    assert "full" in [value for _, value in top["finetuning_type"].choices]
+    assert top["quantization_bit"].visible is True
+    assert top["quantization_bit"].value == "none"
+
+
 def test_live_memory_assessment_uses_current_batch_size(tmp_path, monkeypatch) -> None:
     config = {
         "hidden_size": 4096,
@@ -114,3 +142,31 @@ def test_all_webui_slider_defaults_are_within_bounds() -> None:
     ]
 
     assert invalid_sliders == []
+
+
+def test_force_cancel_returns_to_parameter_step_and_resets_acknowledgement() -> None:
+    modal, acknowledgement, force_start, *pages = train_components._return_to_parameters()
+
+    assert modal.visible is False
+    assert acknowledgement.value is False
+    assert force_start.interactive is False
+    assert [page.visible for page in pages] == [False, False, True, False]
+
+
+def test_language_switch_does_not_output_training_parameters(monkeypatch) -> None:
+    from llamafactory.webui.engine import Engine
+
+    engine = Engine(demo_mode=True)
+    monkeypatch.setattr("llamafactory.webui.interface.Engine", lambda **kwargs: engine)
+    demo = create_ui(demo_mode=True)
+    language = engine.manager.get_elem_by_id("top.lang")
+    training_controls = {
+        engine.manager.get_elem_by_id(f"train.{name}")._id
+        for name in ("cutoff_len", "batch_size", "learning_rate", "num_train_epochs", "lr_scheduler_type")
+    }
+
+    for event in demo.fns.values():
+        if (language._id, "change") not in event.targets or event.fn == engine.change_lang:
+            continue
+
+        assert not training_controls.intersection(component._id for component in event.outputs)

@@ -21,7 +21,7 @@ from transformers.trainer_utils import SchedulerType
 from ...extras.constants import TRAINING_STAGES
 from ...extras.misc import get_device_count
 from ...extras.packages import is_gradio_available
-from ..common import DEFAULT_DATA_DIR
+from ..common import DEFAULT_DATA_DIR, calculate_pixels
 from ..control import change_stage, list_checkpoints, list_datasets, list_output_dirs
 from ..locales import LOCALES, WIZARD_GUIDANCE_LOCALES, WIZARD_MEMORY_LOCALES, WIZARD_SUMMARY_LOCALES
 from ..memory import estimate_training_memory, get_device_memory_snapshot, read_model_shape
@@ -41,6 +41,10 @@ if TYPE_CHECKING:
 
 def _localized_value(key: str) -> str:
     return LOCALES[key]["en"]["value"]
+
+
+def _localized_label(key: str) -> str:
+    return LOCALES[key]["en"]["label"]
 
 
 def _show_wizard_step(step: int) -> tuple[Any, Any, Any, Any]:
@@ -77,6 +81,8 @@ def _recommend_training_setup(
     hardware: str,
     model_path: str,
     priority: str,
+    finetuning_type: str,
+    quantization_bit: str,
 ) -> tuple[Any, ...]:
     text = _guidance_text(lang)
     stage = {
@@ -87,10 +93,12 @@ def _recommend_training_setup(
 
     capacity = {"low": 0, "mid": 1, "high": 2, "multi": 3}.get(hardware, 1)
     inspection_error = False
+    is_multimodal = False
     try:
         model_shape = read_model_shape(model_path)
         weight_size_gib = model_shape.weight_size_bytes / (1024**3)
         pressure = 0 if weight_size_gib <= 8 else 1 if weight_size_gib <= 20 else 2 if weight_size_gib <= 60 else 3
+        is_multimodal = model_shape.is_multimodal
     except (OSError, ValueError, json.JSONDecodeError):
         weight_size_gib = 0.0
         pressure = 3
@@ -102,16 +110,6 @@ def _recommend_training_setup(
     if pressure > capacity:
         batch_size = 1
         cutoff_len = min(cutoff_len, 1024)
-
-    finetuning_type = "lora"
-    if priority == "quality" and pressure == 0 and hardware in {"high", "multi"}:
-        finetuning_type = "full"
-
-    quantization_bit = "none"
-    if finetuning_type != "full" and (
-        hardware in {"low", "mid"} or pressure > capacity or pressure == 3 or priority == "memory"
-    ):
-        quantization_bit = "4"
 
     if priority == "memory":
         batch_size = max(1, batch_size // 2)
@@ -166,9 +164,6 @@ def _recommend_training_setup(
 
     return (
         stage,
-        finetuning_type,
-        quantization_bit,
-        "bnb",
         compute_type,
         cutoff_len,
         batch_size,
@@ -183,6 +178,8 @@ def _recommend_training_setup(
         not inspection_error,
         param_mode,
         *_show_param_branch(param_mode),
+        is_multimodal,
+        *_show_specialized_sections(finetuning_type, is_multimodal),
     )
 
 
@@ -209,8 +206,19 @@ def _show_param_branch(mode: str) -> tuple[Any, Any]:
     return gr.Group(visible=mode == "resources"), gr.Group(visible=mode == "learning")
 
 
+def _show_specialized_sections(finetuning_type: str, is_multimodal: bool) -> tuple[Any, Any]:
+    return gr.Accordion(visible=finetuning_type == "lora"), gr.Accordion(visible=is_multimodal)
+
+
 def _memory_text(lang: str | None) -> dict[str, Any]:
     return WIZARD_MEMORY_LOCALES.get(lang or "en", WIZARD_MEMORY_LOCALES["en"])
+
+
+def _parse_pixels(value: Any, default: int) -> int:
+    try:
+        return calculate_pixels(str(value))
+    except (AttributeError, TypeError, ValueError):
+        return default
 
 
 def _build_memory_report(
@@ -317,6 +325,12 @@ def _assess_training_memory(
         device_count=device_count,
         booster=get("top.booster", "liger_kernel"),
         gradient_checkpointing=gradient_checkpointing,
+        is_multimodal=bool(get("train.model_is_multimodal", False)),
+        freeze_vision_tower=bool(get("train.freeze_vision_tower", True)),
+        freeze_multi_modal_projector=bool(get("train.freeze_multi_modal_projector", True)),
+        freeze_language_model=bool(get("train.freeze_language_model", False)),
+        image_max_pixels=_parse_pixels(get("train.image_max_pixels", "768*768"), 768 * 768),
+        video_max_pixels=_parse_pixels(get("train.video_max_pixels", "256*256"), 256 * 256),
     )
 
     if device_memory.free_gib is None:
@@ -370,6 +384,10 @@ def _toggle_force_start(acknowledged: bool) -> Any:
 
 def _close_force_dialog() -> tuple[Any, Any, Any]:
     return gr.Group(visible=False), gr.Checkbox(value=False), gr.Button(interactive=False)
+
+
+def _return_to_parameters() -> tuple[Any, ...]:
+    return (*_close_force_dialog(), *_show_wizard_step(3))
 
 
 def _invalidate_memory_check() -> tuple[Any, ...]:
@@ -514,7 +532,7 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
 
         with gr.Group(elem_classes="oobe-card"):
             wizard_model_card = gr.Markdown(_localized_value("wizard_model_card"))
-            top_elems = create_top()
+            top_elems = create_top(engine.manager.get_elem_by_id("top.lang"))
             engine.manager.add_elems("top", top_elems)
 
         guidance = WIZARD_GUIDANCE_LOCALES["en"]
@@ -537,6 +555,7 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             wizard_profile_result = gr.HTML()
             wizard_profile_ready = gr.State(False)
             wizard_hardware = gr.State(_detect_hardware_profile())
+            model_is_multimodal = gr.State(False)
 
         with gr.Group(visible=False):
             current_time = gr.Textbox(visible=False, interactive=False)
@@ -590,26 +609,61 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
                 learning_rate = gr.Textbox(value="5e-5")
                 num_train_epochs = gr.Textbox(value="3.0")
 
+        with gr.Accordion(
+            _localized_label("wizard_common_params"), open=False, elem_classes="oobe-advanced"
+        ) as wizard_common_params:
+            wizard_common_params_guide = gr.Markdown(_localized_value("wizard_common_params_guide"))
+            with gr.Row():
+                max_samples = gr.Textbox(value="100000")
+                lr_scheduler_type = gr.Dropdown(
+                    choices=[scheduler.value for scheduler in SchedulerType], value="cosine"
+                )
+                max_grad_norm = gr.Textbox(value="1.0")
+                train_seed = gr.Textbox(value="42")
+
+            with gr.Row():
+                logging_steps = gr.Slider(minimum=1, maximum=1000, value=5, step=1)
+                save_steps = gr.Slider(minimum=10, maximum=5000, value=100, step=10)
+                warmup_steps = gr.Slider(minimum=0, maximum=5000, value=0, step=1)
+                packing = gr.Checkbox()
+
+        with gr.Accordion(
+            _localized_label("lora_tab"), open=False, visible=True, elem_classes="oobe-advanced"
+        ) as wizard_lora_params:
+            wizard_lora_params_guide = gr.Markdown(_localized_value("wizard_lora_params_guide"))
+            with gr.Row():
+                lora_rank = gr.Slider(minimum=1, maximum=1024, value=8, step=1)
+                lora_alpha = gr.Slider(minimum=1, maximum=2048, value=16, step=1)
+                lora_dropout = gr.Slider(minimum=0, maximum=1, value=0, step=0.01)
+
+            with gr.Row():
+                use_rslora = gr.Checkbox()
+                use_dora = gr.Checkbox()
+
+        with gr.Accordion(
+            _localized_label("mm_tab"), open=False, visible=False, elem_classes="oobe-advanced"
+        ) as wizard_multimodal_params:
+            wizard_multimodal_params_guide = gr.Markdown(_localized_value("wizard_multimodal_params_guide"))
+            with gr.Row():
+                freeze_vision_tower = gr.Checkbox(value=True)
+                freeze_multi_modal_projector = gr.Checkbox(value=True)
+                freeze_language_model = gr.Checkbox(value=False)
+
+            with gr.Row():
+                image_max_pixels = gr.Textbox(value="768*768")
+                image_min_pixels = gr.Textbox(value="32*32")
+                video_max_pixels = gr.Textbox(value="256*256")
+                video_min_pixels = gr.Textbox(value="16*16")
+
         with gr.Group(elem_classes="oobe-card oobe-live-memory"):
             wizard_live_memory_intro = gr.Markdown(_localized_value("wizard_live_memory_intro"))
             wizard_live_memory_report = gr.HTML()
 
-        max_samples = gr.Textbox(value="100000", visible=False)
-        lr_scheduler_type = gr.Dropdown(
-            choices=[scheduler.value for scheduler in SchedulerType], value="cosine", visible=False
-        )
-        max_grad_norm = gr.Textbox(value="1.0", visible=False)
-        train_seed = gr.Textbox(value="42", visible=False)
-
         # Compatibility values remain part of saved configurations, but are intentionally
         # absent from the guided interface. The wizard owns safe defaults for them.
         with gr.Group(visible=False):
-            logging_steps = gr.Slider(minimum=1, maximum=1000, value=5, step=5)
-            save_steps = gr.Slider(minimum=10, maximum=5000, value=100, step=10)
-            warmup_steps = gr.Slider(minimum=0, maximum=5000, value=0, step=1)
             neftune_alpha = gr.Slider(minimum=0, maximum=10, value=0, step=0.1)
             extra_args = gr.Textbox(value='{"optim": "adamw_torch"}')
-            packing = gr.Checkbox()
             neat_packing = gr.Checkbox()
             train_on_prompt = gr.Checkbox()
             mask_history = gr.Checkbox()
@@ -620,13 +674,8 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             freeze_trainable_layers = gr.Slider(minimum=-128, maximum=128, value=2, step=1)
             freeze_trainable_modules = gr.Textbox(value="all")
             freeze_extra_modules = gr.Textbox()
-            lora_rank = gr.Slider(minimum=1, maximum=1024, value=8, step=1)
-            lora_alpha = gr.Slider(minimum=1, maximum=2048, value=16, step=1)
-            lora_dropout = gr.Slider(minimum=0, maximum=1, value=0, step=0.01)
             loraplus_lr_ratio = gr.Slider(minimum=0, maximum=64, value=0, step=0.01)
             create_new_adapter = gr.Checkbox()
-            use_rslora = gr.Checkbox()
-            use_dora = gr.Checkbox()
             use_pissa = gr.Checkbox()
             lora_target = gr.Textbox()
             additional_target = gr.Textbox()
@@ -636,13 +685,6 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             reward_model = gr.Dropdown(multiselect=True, allow_custom_value=True)
             ppo_score_norm = gr.Checkbox()
             ppo_whiten_rewards = gr.Checkbox()
-            freeze_vision_tower = gr.Checkbox(value=True)
-            freeze_multi_modal_projector = gr.Checkbox(value=True)
-            freeze_language_model = gr.Checkbox(value=False)
-            image_max_pixels = gr.Textbox(value="768*768")
-            image_min_pixels = gr.Textbox(value="32*32")
-            video_max_pixels = gr.Textbox(value="256*256")
-            video_min_pixels = gr.Textbox(value="16*16")
             use_galore = gr.Checkbox()
             galore_rank = gr.Slider(minimum=1, maximum=1024, value=16, step=1)
             galore_update_interval = gr.Slider(minimum=1, maximum=2048, value=200, step=1)
@@ -790,6 +832,7 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             output_dir,
             ds_stage,
             ds_offload,
+            model_is_multimodal,
         }
     )
     memory_input_elems = {
@@ -807,6 +850,12 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         ds_stage,
         ds_offload,
         extra_args,
+        model_is_multimodal,
+        freeze_vision_tower,
+        freeze_multi_modal_projector,
+        freeze_language_model,
+        image_max_pixels,
+        video_max_pixels,
     }
 
     elem_dict.update(
@@ -827,6 +876,12 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             wizard_param_mode=wizard_param_mode,
             wizard_resource_params_guide=wizard_resource_params_guide,
             wizard_learning_params_guide=wizard_learning_params_guide,
+            wizard_common_params=wizard_common_params,
+            wizard_common_params_guide=wizard_common_params_guide,
+            lora_tab=wizard_lora_params,
+            wizard_lora_params_guide=wizard_lora_params_guide,
+            mm_tab=wizard_multimodal_params,
+            wizard_multimodal_params_guide=wizard_multimodal_params_guide,
             wizard_live_memory_intro=wizard_live_memory_intro,
             wizard_live_memory_report=wizard_live_memory_report,
             wizard_params_back_btn=wizard_params_back_btn,
@@ -921,6 +976,7 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             device_count=device_count,
             ds_stage=ds_stage,
             ds_offload=ds_offload,
+            model_is_multimodal=model_is_multimodal,
             resume_btn=resume_btn,
             progress_bar=progress_bar,
             output_box=output_box,
@@ -944,12 +1000,11 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         wizard_hardware,
         top_elems["model_path"],
         wizard_priority,
+        top_elems["finetuning_type"],
+        top_elems["quantization_bit"],
     ]
     recommendation_outputs = [
         training_stage,
-        top_elems["finetuning_type"],
-        top_elems["quantization_bit"],
-        top_elems["quantization_method"],
         compute_type,
         cutoff_len,
         batch_size,
@@ -964,8 +1019,17 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         wizard_profile_ready,
         wizard_param_mode,
         *branch_outputs,
+        model_is_multimodal,
+        wizard_lora_params,
+        wizard_multimodal_params,
     ]
-    for profile_control in (wizard_goal, top_elems["model_path"], wizard_priority):
+    for profile_control in (
+        wizard_goal,
+        top_elems["model_path"],
+        wizard_priority,
+        top_elems["finetuning_type"],
+        top_elems["quantization_bit"],
+    ):
         profile_control.change(
             _recommend_training_setup,
             inputs=recommendation_inputs,
@@ -1045,8 +1109,8 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         queue=False,
     )
     wizard_force_cancel_btn.click(
-        _close_force_dialog,
-        outputs=[wizard_risk_modal, wizard_force_ack, wizard_force_start_btn],
+        _return_to_parameters,
+        outputs=[wizard_risk_modal, wizard_force_ack, wizard_force_start_btn, *wizard_steps],
         queue=False,
     )
 
@@ -1064,9 +1128,9 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
     finetuning_type: gr.Dropdown = engine.manager.get_elem_by_id("top.finetuning_type")
     lang.change(_build_wizard_summary, summary_inputs, [wizard_summary], queue=False)
     lang.change(
-        _recommend_training_setup,
+        lambda *values: _recommend_training_setup(*values)[11],
         inputs=recommendation_inputs,
-        outputs=recommendation_outputs,
+        outputs=[wizard_profile_result],
         queue=False,
     ).then(
         lambda data: _run_live_memory_estimate(data, engine.manager),
@@ -1089,6 +1153,12 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         ds_offload,
         extra_args,
         reward_model,
+        model_is_multimodal,
+        freeze_vision_tower,
+        freeze_multi_modal_projector,
+        freeze_language_model,
+        image_max_pixels,
+        video_max_pixels,
     )
     for memory_sensitive_elem in memory_sensitive_elems:
         memory_sensitive_elem.change(
@@ -1109,8 +1179,26 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             outputs=[wizard_live_memory_report],
             concurrency_limit=None,
         )
-    for live_memory_slider in (cutoff_len, batch_size):
+    for live_memory_slider in (cutoff_len, batch_size, lora_rank):
         live_memory_slider.release(
+            lambda data: _run_live_memory_estimate(data, engine.manager),
+            inputs=memory_input_elems,
+            outputs=[wizard_live_memory_report],
+            concurrency_limit=None,
+        )
+    for live_memory_checkbox in (
+        freeze_vision_tower,
+        freeze_multi_modal_projector,
+        freeze_language_model,
+    ):
+        live_memory_checkbox.input(
+            lambda data: _run_live_memory_estimate(data, engine.manager),
+            inputs=memory_input_elems,
+            outputs=[wizard_live_memory_report],
+            concurrency_limit=None,
+        )
+    for live_memory_textbox in (image_max_pixels, video_max_pixels):
+        live_memory_textbox.change(
             lambda data: _run_live_memory_estimate(data, engine.manager),
             inputs=memory_input_elems,
             outputs=[wizard_live_memory_report],

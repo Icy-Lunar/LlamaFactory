@@ -21,47 +21,94 @@ CSS = r"""
 }
 
 .gradio-container {
-  max-width: 1680px !important;
-  padding: 18px clamp(14px, 2.5vw, 38px) 32px !important;
+  --font: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  --cy-accent: #2563eb;
+  --cy-tint: rgba(37, 99, 235, 0.065);
+  --cy-line: #dce4f0;
+  --cy-canvas: #f4f7fc;
+  --cy-surface: #ffffff;
+  --cy-text: #182940;
+  --cy-muted: #55677f;
+  max-width: 1360px !important;
+  padding: 20px clamp(16px, 3vw, 40px) 36px !important;
   background:
-    radial-gradient(circle at 4% 0%, rgba(37, 99, 235, 0.08), transparent 24rem),
-    var(--body-background-fill);
+    radial-gradient(circle at 98% 0%, var(--cy-tint), transparent 30rem),
+    var(--cy-canvas);
+  color: var(--cy-text);
+  --body-text-color: var(--cy-text);
+  --body-text-color-subdued: var(--cy-muted);
+  --background-fill-primary: var(--cy-surface);
+  --background-fill-secondary: var(--cy-canvas);
+  --border-color-primary: var(--cy-line);
 }
 
+.dark .gradio-container {
+  --cy-accent: #82b1ff;
+  --cy-tint: rgba(99, 153, 255, 0.10);
+  --cy-line: #2c3c53;
+  --cy-canvas: #0f1726;
+  --cy-surface: #182335;
+  --cy-text: #e7edf6;
+  --cy-muted: #adbbce;
+}
+
+.product-header {
+  align-items: center !important;
+  gap: 20px !important;
+  padding: 4px 0 18px;
+  border-bottom: 1px solid var(--cy-line);
+}
+
+.product-header > .column {
+  gap: 6px !important;
+}
+
+.product-header center { text-align: left; }
+
 .product-title h1 {
-  margin: 4px 0 0;
-  font-size: clamp(25px, 3vw, 36px);
-  letter-spacing: -0.035em;
+  margin: 0 !important;
+  font-size: clamp(20px, 2vw, 27px);
+  letter-spacing: -0.025em;
+  line-height: 1.35;
 }
 
 .product-subtitle p {
-  margin: 4px 0 12px;
+  margin: 0 !important;
   color: var(--body-text-color-subdued);
   font-size: 13px;
 }
 
 .compact-language-row {
-  width: min(100%, 220px);
-  margin-left: auto;
+  flex: 1 1 auto !important;
+  width: 100%;
+  min-width: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  margin: 0;
+}
+
+.product-header > .form:has(.compact-language-row) {
+  flex: 0 0 112px !important;
+  min-width: 112px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
 }
 
 .enterprise-workspace-nav {
-  position: sticky;
-  z-index: 50;
-  top: 8px;
-  width: min(100%, 470px);
-  margin: 0 auto 18px;
+  flex: 0 1 340px !important;
+  width: min(100%, 340px);
+  margin: 0;
   gap: 5px !important;
   padding: 5px;
   border: 1px solid var(--border-color-primary);
   border-radius: 14px;
   background: color-mix(in srgb, var(--background-fill-primary) 92%, transparent);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(14px);
 }
 
 .enterprise-workspace-nav button {
-  min-width: min(42vw, 220px);
+  min-width: 120px !important;
   min-height: 42px;
   border: 0 !important;
   border-radius: 10px !important;
@@ -81,17 +128,18 @@ CSS = r"""
 .oobe-hero {
   position: relative;
   overflow: hidden;
-  margin: 12px 0 22px;
-  padding: 30px 34px;
+  margin: 4px 0 0;
+  padding: 18px 22px;
   border: 1px solid color-mix(in srgb, var(--border-color-primary) 72%, #2563eb 28%);
   border-radius: 20px;
   background:
     radial-gradient(circle at 88% 12%, rgba(37, 99, 235, 0.18), transparent 34%),
     linear-gradient(135deg, var(--background-fill-primary), var(--background-fill-secondary));
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  box-shadow: none;
 }
 
 .oobe-hero::after {
+  pointer-events: none;
   content: "";
   position: absolute;
   width: 180px;
@@ -110,7 +158,7 @@ CSS = r"""
 }
 
 .oobe-hero h1 {
-  font-size: clamp(26px, 3vw, 38px);
+  font-size: clamp(20px, 2vw, 26px);
   line-height: 1.15;
 }
 
@@ -123,7 +171,7 @@ CSS = r"""
 }
 
 .oobe-kicker {
-  color: #2563eb;
+  color: var(--cy-accent);
   font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.13em;
@@ -131,23 +179,23 @@ CSS = r"""
 
 .oobe-page {
   gap: 16px !important;
-  max-width: 1180px;
+  max-width: 1200px;
   margin-inline: auto;
 }
 
 .oobe-page-header {
-  padding: 6px 4px 10px;
+  padding: 10px 2px 4px;
 }
 
 .oobe-page-header h2 {
-  font-size: clamp(23px, 2.2vw, 31px);
+  font-size: clamp(22px, 2vw, 28px);
 }
 
 .oobe-stepper {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 24px;
+  margin-top: 18px;
 }
 
 .oobe-step {
@@ -156,25 +204,25 @@ CSS = r"""
   align-items: center;
   gap: 9px;
   min-width: 0;
-  padding: 11px 13px;
-  border: 1px solid var(--border-color-primary);
-  border-radius: 12px;
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 2px solid var(--cy-line);
+  border-radius: 0;
   color: var(--body-text-color-subdued);
-  background: var(--background-fill-secondary);
+  background: transparent;
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
 }
 
 .oobe-step.is-active {
-  border-color: #2563eb;
+  border-color: var(--cy-accent);
   color: var(--body-text-color);
-  background: rgba(37, 99, 235, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+  background: var(--cy-tint);
 }
 
 .oobe-step.is-done {
-  color: #16803c;
-  border-color: rgba(22, 128, 60, 0.28);
-  background: rgba(22, 128, 60, 0.07);
+  color: var(--cy-accent);
+  border-color: var(--cy-accent);
+  background: transparent;
 }
 
 .oobe-step-number {
@@ -204,11 +252,11 @@ CSS = r"""
 }
 
 .oobe-card {
-  padding: 17px 18px 19px !important;
+  padding: 20px !important;
   border: 1px solid var(--border-color-primary) !important;
   border-radius: 16px !important;
   background: var(--background-fill-primary) !important;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.055);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.035);
 }
 
 .oobe-card > .wrap:first-child,
@@ -280,7 +328,7 @@ CSS = r"""
 }
 
 .oobe-questionnaire .gradio-radio {
-  min-width: min(100%, 26rem);
+  min-width: min(100%, 18rem);
 }
 
 .oobe-branch-selector {
@@ -316,7 +364,7 @@ CSS = r"""
   gap: 0.75rem;
   align-items: flex-start;
   padding: 1rem 1.1rem;
-  background: color-mix(in srgb, var(--primary-50) 78%, transparent);
+  background: var(--cy-tint);
 }
 
 .oobe-profile-result header > span {
@@ -390,8 +438,8 @@ CSS = r"""
   padding: 0.8rem 1rem;
   border: 1px solid color-mix(in srgb, #dc2626 46%, var(--border-color-primary));
   border-radius: 0.8rem;
-  background: color-mix(in srgb, #fee2e2 72%, var(--background-fill-primary));
-  color: color-mix(in srgb, #991b1b 82%, var(--body-text-color));
+  background: color-mix(in srgb, #dc2626 10%, var(--cy-surface));
+  color: var(--cy-text);
   font-weight: 650;
 }
 
@@ -447,7 +495,7 @@ CSS = r"""
 }
 
 .oobe-memory-report.is-safe header {
-  background: color-mix(in srgb, #dcfce7 68%, var(--background-fill-primary));
+  background: color-mix(in srgb, #16a34a 12%, var(--cy-surface));
 }
 
 .oobe-memory-report.is-safe header > span {
@@ -459,7 +507,7 @@ CSS = r"""
 }
 
 .oobe-memory-report:not(.is-safe) header {
-  background: color-mix(in srgb, #fef3c7 68%, var(--background-fill-primary));
+  background: color-mix(in srgb, #d97706 12%, var(--cy-surface));
 }
 
 .oobe-memory-report:not(.is-safe) header > span {
@@ -493,7 +541,6 @@ CSS = r"""
   position: fixed !important;
   z-index: 1000 !important;
   inset: 0 !important;
-  display: flex !important;
   overflow: auto;
   align-items: center;
   justify-content: center;
@@ -504,6 +551,17 @@ CSS = r"""
   backdrop-filter: blur(3px);
 }
 
+.oobe-risk-modal:not(.hide) {
+  display: flex;
+}
+
+.oobe-risk-modal.hide,
+.modal-box.hide {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.oobe-risk-modal > .styler,
 .oobe-risk-modal > .wrap,
 .oobe-risk-modal > .form {
   width: min(100%, 38rem);
@@ -551,7 +609,7 @@ CSS = r"""
   margin: 1rem 0;
   padding: 0.75rem;
   border-radius: 0.75rem;
-  background: color-mix(in srgb, #fee2e2 60%, var(--background-fill-secondary));
+  background: color-mix(in srgb, #dc2626 10%, var(--cy-surface));
 }
 
 .oobe-advanced {
@@ -637,7 +695,7 @@ CSS = r"""
 .merge-hero {
   position: relative;
   overflow: hidden;
-  padding: 30px 34px;
+  padding: 22px 26px;
   border: 1px solid color-mix(in srgb, var(--border-color-primary) 68%, #7c3aed 32%);
   border-radius: 20px;
   background:
@@ -647,6 +705,7 @@ CSS = r"""
 }
 
 .merge-hero::after {
+  pointer-events: none;
   position: absolute;
   right: -42px;
   bottom: -72px;
@@ -667,7 +726,7 @@ CSS = r"""
 .merge-hero h1 {
   margin: 6px 0 8px;
   color: var(--body-text-color);
-  font-size: clamp(26px, 3vw, 37px);
+  font-size: clamp(22px, 2.5vw, 30px);
   line-height: 1.16;
   letter-spacing: -0.025em;
 }
@@ -750,7 +809,7 @@ CSS = r"""
 
 @media (max-width: 520px) {
   .oobe-stepper {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .oobe-summary-row {
@@ -772,17 +831,150 @@ CSS = r"""
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%); /* center horizontally */
-  max-width: 1000px;
-  max-height: 750px;
+  width: min(1000px, calc(100vw - 32px)) !important;
+  max-height: calc(100dvh - 48px);
   overflow-y: auto;
   background-color: var(--input-background-fill);
   flex-wrap: nowrap !important;
-  border: 2px solid black !important;
+  border: 1px solid var(--cy-line) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
   z-index: 1000;
-  padding: 10px;
+  padding: 20px !important;
 }
 
-.dark .modal-box {
-  border: 2px solid white !important;
+.gradio-container .block:has(> .prose),
+.gradio-container .block:has(> .html-container) {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.oobe-card > .styler,
+.merge-card > .styler,
+.oobe-advanced > .styler {
+  background: transparent !important;
+}
+
+.oobe-card .form,
+.merge-card .form,
+.oobe-advanced .form {
+  gap: 12px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.oobe-card .block,
+.oobe-advanced .block,
+.merge-card .block {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+.gradio-container input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.gradio-container textarea,
+.gradio-container .secondary-wrap {
+  color: var(--cy-text);
+  border-radius: 9px !important;
+}
+
+.gradio-container button {
+  transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.gradio-container button:is(.primary, .secondary, .stop) {
+  border-radius: 10px !important;
+  min-height: 42px;
+}
+
+.gradio-container button.stop {
+  color: #fff !important;
+  background: #b91c1c !important;
+  border-color: #b91c1c !important;
+}
+
+.gradio-container button.stop:hover:not(:disabled) { background: #991b1b !important; }
+
+.oobe-risk-modal .row { gap: 10px !important; }
+
+.gradio-container button.primary {
+  color: #fff !important;
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+}
+
+.gradio-container button.primary:hover:not(:disabled) {
+  background: #1d4ed8 !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.22);
+}
+
+.gradio-container button.secondary {
+  color: var(--cy-text) !important;
+  background: var(--cy-surface) !important;
+  border: 1px solid var(--cy-line) !important;
+}
+
+.gradio-container button.secondary:hover:not(:disabled) {
+  background: var(--cy-tint) !important;
+  border-color: var(--cy-accent) !important;
+}
+
+.gradio-container button:disabled {
+  opacity: 0.48 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+}
+
+.gradio-container :is(button, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--cy-accent) !important;
+  outline-offset: 3px;
+}
+
+.oobe-questionnaire .gradio-radio label,
+.oobe-branch-selector .wrap label {
+  border: 1px solid var(--cy-line) !important;
+  border-radius: 10px !important;
+  padding: 11px 13px !important;
+  color: var(--cy-muted);
+  background: var(--cy-surface) !important;
+  cursor: pointer;
+}
+
+.oobe-questionnaire .gradio-radio label:has(input:checked),
+.oobe-branch-selector .wrap label:has(input:checked) {
+  border-color: var(--cy-accent) !important;
+  color: var(--cy-text);
+  background: var(--cy-tint) !important;
+}
+
+.oobe-questionnaire .wrap,
+.oobe-branch-selector .wrap { gap: 8px !important; }
+
+.oobe-advanced {
+  border: 1px solid var(--cy-line) !important;
+  background: var(--cy-surface) !important;
+  overflow: visible;
+}
+
+.oobe-advanced > button {
+  padding: 16px 18px !important;
+  min-height: 54px;
+}
+
+.oobe-advanced > button:hover { background: var(--cy-tint) !important; }
+
+.oobe-advanced > .wrap { padding: 0 16px 16px !important; }
+
+@media (max-width: 760px) {
+  .enterprise-workspace-nav { flex-basis: 100% !important; width: 100%; }
+  .product-header { gap: 12px !important; }
+  .oobe-card, .merge-card { padding: 14px !important; }
+  .oobe-nav button { flex: 1 1 180px !important; min-width: 0 !important; }
+  .oobe-step-label { white-space: normal; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gradio-container *, .gradio-container *::after { transition: none !important; }
 }
 """

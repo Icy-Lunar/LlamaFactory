@@ -2935,7 +2935,7 @@ _WIZARD_TRANSLATIONS = {
         "headers": (
             (
                 "Choose a local model and training goal",
-                "Enter the model directory and desired outcome. Hardware is detected and the starting configuration is generated automatically.",
+                "Enter the model directory, choose the fine-tuning method and quantization, then select the desired outcome. Hardware is detected automatically.",
             ),
             (
                 "Choose the training dataset",
@@ -2943,7 +2943,7 @@ _WIZARD_TRANSLATIONS = {
             ),
             (
                 "Adjust only what matters",
-                "Use the generated configuration unchanged, or open one focused branch for resources or learning quality.",
+                "Use the generated configuration unchanged, open a focused branch, or expand common and model-specific parameters.",
             ),
             (
                 "Run the safety check and start",
@@ -2952,7 +2952,7 @@ _WIZARD_TRANSLATIONS = {
         ),
         "model_card": (
             "### 1. Local model directory\n"
-            "Enter a directory already present on this machine. The system reads config.json and totals the model weight files automatically."
+            "Enter a directory already present on this machine. The system reads config.json and totals the model weight files automatically. Choose LoRA, full, or another supported method and select quantization yourself; 4-bit loading is never enabled automatically."
         ),
         "environment_card": (
             "### 2. Results and compute environment\n"
@@ -3006,7 +3006,7 @@ _WIZARD_TRANSLATIONS = {
         "headers": (
             (
                 "Выберите локальную модель и цель",
-                "Укажите каталог модели и желаемый результат. Оборудование определяется, а начальные параметры создаются автоматически.",
+                "Укажите каталог модели, метод дообучения, квантизацию и желаемый результат. Оборудование определяется автоматически.",
             ),
             (
                 "Выберите набор данных",
@@ -3014,7 +3014,7 @@ _WIZARD_TRANSLATIONS = {
             ),
             (
                 "Измените только нужные параметры",
-                "Оставьте созданную конфигурацию или откройте одну ветку: ресурсы либо качество обучения.",
+                "Оставьте созданную конфигурацию, откройте одну ветку либо разверните основные и модельные параметры.",
             ),
             (
                 "Проверьте безопасность и запустите обучение",
@@ -3023,7 +3023,7 @@ _WIZARD_TRANSLATIONS = {
         ),
         "model_card": (
             "### 1. Локальный каталог модели\n"
-            "Укажите каталог, уже находящийся на этом компьютере. Система прочитает config.json и автоматически суммирует файлы весов."
+            "Укажите локальный каталог модели. Система прочитает config.json и суммирует файлы весов. Самостоятельно выберите LoRA, full или другой поддерживаемый метод и квантизацию; 4-битная загрузка автоматически не включается."
         ),
         "environment_card": (
             "### 2. Результаты и вычислительная среда\n"
@@ -3073,7 +3073,7 @@ _WIZARD_TRANSLATIONS = {
         "headers": (
             (
                 "选择本地模型与训练目标",
-                "填写模型目录并选择期望效果。系统会自动检测硬件并生成起始配置。",
+                "填写模型目录，选择微调方法和量化方式，再选择期望效果；硬件由系统自动检测。",
             ),
             (
                 "选择训练数据",
@@ -3081,7 +3081,7 @@ _WIZARD_TRANSLATIONS = {
             ),
             (
                 "只调整真正需要的参数",
-                "可以直接使用自动配置，也可以只打开显存与速度或学习质量中的一个分支。",
+                "可以直接使用推荐配置、打开一个重点分支，或展开常用参数与模型专项参数。",
             ),
             (
                 "完成安全检查并启动训练",
@@ -3089,7 +3089,7 @@ _WIZARD_TRANSLATIONS = {
             ),
         ),
         "model_card": (
-            "### 1. 本地模型目录\n填写本机已经存在的模型目录。系统会读取 config.json，并自动汇总模型权重文件大小。"
+            "### 1. 本地模型目录\n填写本机已经存在的模型目录。系统会读取 config.json 并汇总权重文件；请自行选择 LoRA、Full 或其他受支持的微调方法以及量化方式，系统不会自动启用 4-bit。"
         ),
         "environment_card": ("### 2. 结果保存与计算环境\n输出目录和配置文件会自动按当前时间生成，也可以手动修改。"),
         "data_guide": (
@@ -3134,13 +3134,16 @@ _WIZARD_TRANSLATIONS = {
         "headers": (
             (
                 "로컬 모델 및 목표 선택",
-                "모델 디렉터리와 원하는 결과를 선택하세요. 하드웨어와 시작 구성은 자동으로 결정됩니다.",
+                "모델 디렉터리, 파인튜닝 방식, 양자화 및 원하는 결과를 선택하세요. 하드웨어는 자동 감지됩니다.",
             ),
             (
                 "학습 데이터 선택",
                 "학습 방식은 목표에 따라 이미 설정되었습니다. 데이터셋을 선택하고 샘플을 미리 보세요.",
             ),
-            ("필요한 항목만 조정", "자동 구성을 그대로 사용하거나 리소스 또는 학습 품질 중 한 가지만 조정하세요."),
+            (
+                "필요한 항목만 조정",
+                "권장 구성을 사용하거나 하나의 분기를 열고 일반 및 모델별 파라미터를 필요할 때 펼치세요.",
+            ),
             (
                 "안전 확인 후 학습 시작",
                 "출력 디렉터리와 구성을 확인하고 학습 전에 사용 가능한 GPU 메모리를 검사하세요.",
@@ -3148,7 +3151,7 @@ _WIZARD_TRANSLATIONS = {
         ),
         "model_card": (
             "### 1. 로컬 모델 디렉터리\n"
-            "이 컴퓨터에 이미 있는 디렉터리를 입력하세요. 시스템이 config.json을 읽고 모델 가중치 파일 크기를 자동으로 합산합니다."
+            "이 컴퓨터에 이미 있는 디렉터리를 입력하세요. 시스템이 config.json과 가중치 크기를 읽습니다. LoRA, full 또는 지원되는 다른 방식과 양자화를 직접 선택하며 4비트는 자동으로 활성화되지 않습니다."
         ),
         "environment_card": (
             "### 2. 결과 및 컴퓨팅 환경\n출력 디렉터리와 설정 파일명은 자동 생성되며 수정할 수 있습니다."
@@ -3196,10 +3199,13 @@ _WIZARD_TRANSLATIONS = {
         "headers": (
             (
                 "ローカルモデルと目的を選択",
-                "モデルディレクトリと目的を選びます。ハードウェアと初期構成は自動的に決まります。",
+                "モデルディレクトリ、ファインチューニング方式、量子化、目的を選びます。ハードウェアは自動検出されます。",
             ),
             ("学習データを選択", "学習方式は目的に応じて設定済みです。データセットを選び、サンプルを確認します。"),
-            ("必要な項目だけ調整", "自動構成をそのまま使うか、リソースまたは学習品質の一方だけを調整します。"),
+            (
+                "必要な項目だけ調整",
+                "推奨構成を使うか、1つの分岐を開き、必要に応じて一般設定とモデル固有設定を展開します。",
+            ),
             (
                 "安全確認後に学習を開始",
                 "出力先と構成を確認し、学習前に利用可能な GPU メモリを検査します。",
@@ -3207,7 +3213,7 @@ _WIZARD_TRANSLATIONS = {
         ),
         "model_card": (
             "### 1. ローカルモデルディレクトリ\n"
-            "このコンピューターに既に存在するディレクトリを入力してください。config.json を読み取り、モデル重みファイルのサイズを自動集計します。"
+            "このコンピューターにあるディレクトリを入力してください。config.json と重みサイズを読み取ります。LoRA、full、その他の対応方式と量子化は自分で選択し、4-bit は自動的に有効になりません。"
         ),
         "environment_card": (
             "### 2. 結果と計算環境\n出力先と設定ファイル名は自動生成され、必要に応じて変更できます。"
@@ -3264,7 +3270,9 @@ def _build_wizard_header(lang: str, step: int) -> str:
     for index, label in enumerate(text["steps"], start=1):
         state = "is-active" if index == step else "is-done" if index < step else ""
         step_items.append(
-            f'<div class="oobe-step {state}"><span class="oobe-step-number">{index}</span>'
+            f'<div class="oobe-step {state}" role="listitem"'
+            + (' aria-current="step"' if index == step else "")
+            + f'><span class="oobe-step-number">{index}</span>'
             f'<span class="oobe-step-label">{label}</span></div>'
         )
 
@@ -3273,7 +3281,7 @@ def _build_wizard_header(lang: str, step: int) -> str:
         '<section class="oobe-page-header">'
         f'<div class="oobe-kicker">{step} / {len(text["steps"])}</div>'
         f"<h2>{title}</h2><p>{description}</p>"
-        f'<div class="oobe-stepper">{"".join(step_items)}</div>'
+        f'<div class="oobe-stepper" role="list">{"".join(step_items)}</div>'
         "</section>"
     )
 
@@ -3459,6 +3467,10 @@ WIZARD_GUIDANCE_LOCALES = {
         ),
         "resource_params_guide": "### GPU memory and speed\nOnly the four settings that directly affect peak VRAM and throughput are shown.",
         "learning_params_guide": "### Learning quality and convergence\nAdjust the learning schedule without exposing infrastructure or expert options.",
+        "common_params_label": "Common training parameters",
+        "common_params_guide": "Frequently used LlamaFactory controls: sample limit, scheduler, gradient clipping, seed, logging interval, checkpoint interval, warmup, and packing.",
+        "lora_params_guide": "Shown only for LoRA. Rank and alpha control adapter capacity; higher rank also increases VRAM usage.",
+        "multimodal_params_guide": "A vision structure was detected in the local model configuration. Choose which vision, projector, and language blocks remain frozen, then set image and video pixel limits.",
         "show_advanced_label": "I want to manually adjust the generated parameters",
         "show_advanced_info": "Optional. Turning this on exposes technical and expert settings.",
         "priority_choices": (
@@ -3484,7 +3496,7 @@ WIZARD_GUIDANCE_LOCALES = {
         "tokens": "{value} tokens",
         "effective_batch": "{value} samples",
         "reason_balanced": "Balanced mode keeps memory use predictable while preserving training stability.",
-        "reason_memory": "Memory-saving mode uses smaller batches and 4-bit loading where supported.",
+        "reason_memory": "Memory-saving mode reduces batch size and context length while preserving the quantization selected in Step 1.",
         "reason_speed": "Speed mode increases device batch size when the selected hardware has room.",
         "reason_quality": "Quality mode preserves precision and context length when the selected hardware can support it.",
         "result_footer": "Continue with these values, or use Step 3 to change only the settings that matter to you.",
@@ -3526,6 +3538,10 @@ WIZARD_GUIDANCE_LOCALES = {
         ),
         "resource_params_guide": "### Видеопамять и скорость\nПоказаны только четыре параметра, напрямую влияющие на пик памяти и производительность.",
         "learning_params_guide": "### Качество и сходимость\nНастройте процесс обучения без инфраструктурных и экспертных параметров.",
+        "common_params_label": "Основные параметры обучения",
+        "common_params_guide": "Часто используемые параметры LlamaFactory: лимит примеров, планировщик, ограничение градиента, seed, интервалы журналирования и сохранения, прогрев и упаковка.",
+        "lora_params_guide": "Показывается только для LoRA. Rank и alpha определяют ёмкость адаптера; больший rank также увеличивает расход видеопамяти.",
+        "multimodal_params_guide": "В локальной конфигурации модели обнаружена визуальная часть. Выберите заморозку визуального энкодера, проектора и языковой модели, затем задайте лимиты пикселей.",
         "show_advanced_label": "Я хочу изменить созданные параметры вручную",
         "show_advanced_info": "Необязательно. Этот переключатель открывает технические и экспертные настройки.",
         "priority_choices": (
@@ -3551,7 +3567,7 @@ WIZARD_GUIDANCE_LOCALES = {
         "tokens": "{value} токенов",
         "effective_batch": "{value} примеров",
         "reason_balanced": "Сбалансированный режим делает расход памяти предсказуемым и сохраняет стабильность обучения.",
-        "reason_memory": "Экономный режим уменьшает пакет и использует 4-битную загрузку, когда она поддерживается.",
+        "reason_memory": "Экономный режим уменьшает пакет и контекст, сохраняя выбранную на шаге 1 квантизацию.",
         "reason_speed": "Быстрый режим увеличивает пакет на устройство, если выбранное оборудование это позволяет.",
         "reason_quality": "Режим качества сохраняет точность и длину контекста, если хватает оборудования.",
         "result_footer": "Продолжайте с этими значениями или измените только нужные параметры на шаге 3.",
@@ -3593,6 +3609,10 @@ WIZARD_GUIDANCE_LOCALES = {
         ),
         "resource_params_guide": "### 显存占用与训练速度\n这里只显示直接影响峰值显存和吞吐量的四个参数。",
         "learning_params_guide": "### 学习质量与收敛效果\n只调整学习策略，不显示基础设施和专家选项。",
+        "common_params_label": "常用训练参数",
+        "common_params_guide": "保留 LlamaFactory 中最常用的设置：样本上限、学习率调度器、梯度裁剪、随机种子、日志与检查点间隔、预热步数和样本打包。",
+        "lora_params_guide": "仅在选择 LoRA 时显示。Rank 和 Alpha 控制适配器容量；提高 Rank 也会增加显存占用。",
+        "multimodal_params_guide": "已从本地模型配置中检测到视觉结构。请选择是否冻结视觉编码器、多模态投影器和语言模型，并设置图像与视频像素上限。",
         "show_advanced_label": "我要手动调整系统生成的参数",
         "show_advanced_info": "可选。开启后会显示技术参数和专家设置。",
         "priority_choices": (
@@ -3611,7 +3631,7 @@ WIZARD_GUIDANCE_LOCALES = {
         "tokens": "{value} 个 token",
         "effective_batch": "{value} 个样本",
         "reason_balanced": "均衡模式会控制显存占用，同时保持训练稳定性。",
-        "reason_memory": "显存优先模式会缩小批次，并在支持时使用 4 位加载。",
+        "reason_memory": "显存优先模式会缩小批次和上下文，同时保留你在第 1 步选择的量化方式。",
         "reason_speed": "速度优先模式会在硬件允许时增大单卡批次。",
         "reason_quality": "质量优先模式会在硬件允许时保留更高精度和更长上下文。",
         "result_footer": "可以直接使用这些值，也可以在第 3 步只修改自己关心的参数。",
@@ -3653,6 +3673,10 @@ WIZARD_GUIDANCE_LOCALES = {
         ),
         "resource_params_guide": "### GPU 메모리와 학습 속도\n최대 메모리와 처리량에 직접 영향을 주는 네 가지 설정만 표시합니다.",
         "learning_params_guide": "### 학습 품질과 수렴\n인프라 및 전문가 옵션을 노출하지 않고 학습 전략만 조정합니다.",
+        "common_params_label": "일반 학습 파라미터",
+        "common_params_guide": "자주 사용하는 LlamaFactory 설정인 샘플 제한, 스케줄러, 그래디언트 클리핑, 시드, 로그 및 체크포인트 간격, 워밍업, 패킹을 제공합니다.",
+        "lora_params_guide": "LoRA를 선택한 경우에만 표시됩니다. Rank와 Alpha는 어댑터 용량을 결정하며 Rank가 높을수록 GPU 메모리 사용량도 증가합니다.",
+        "multimodal_params_guide": "로컬 모델 구성에서 비전 구조를 감지했습니다. 비전 인코더, 프로젝터, 언어 모델의 고정 여부와 이미지 및 비디오 픽셀 제한을 설정하세요.",
         "show_advanced_label": "생성된 파라미터를 수동으로 조정하겠습니다",
         "show_advanced_info": "선택 사항입니다. 켜면 기술 및 전문가 설정이 표시됩니다.",
         "priority_choices": (
@@ -3671,7 +3695,7 @@ WIZARD_GUIDANCE_LOCALES = {
         "tokens": "{value} 토큰",
         "effective_batch": "{value} 샘플",
         "reason_balanced": "균형 모드는 메모리 사용량을 예측 가능하게 유지하면서 학습 안정성을 보존합니다.",
-        "reason_memory": "메모리 절약 모드는 배치를 줄이고 지원되는 경우 4비트 로딩을 사용합니다.",
+        "reason_memory": "메모리 절약 모드는 1단계에서 선택한 양자화를 유지하면서 배치와 컨텍스트 길이를 줄입니다.",
         "reason_speed": "속도 모드는 선택한 하드웨어에 여유가 있을 때 장치 배치를 늘립니다.",
         "reason_quality": "품질 모드는 하드웨어가 지원할 때 정밀도와 컨텍스트 길이를 유지합니다.",
         "result_footer": "이 값을 그대로 사용하거나 3단계에서 필요한 설정만 변경하세요.",
@@ -3713,6 +3737,10 @@ WIZARD_GUIDANCE_LOCALES = {
         ),
         "resource_params_guide": "### GPU メモリと学習速度\nピークメモリとスループットに直接影響する4項目だけを表示します。",
         "learning_params_guide": "### 学習品質と収束\nインフラやエキスパート設定を表示せずに学習戦略だけを調整します。",
+        "common_params_label": "一般的な学習パラメータ",
+        "common_params_guide": "よく使う LlamaFactory の設定として、サンプル上限、スケジューラ、勾配クリッピング、シード、ログとチェックポイント間隔、ウォームアップ、パッキングを用意しています。",
+        "lora_params_guide": "LoRA 選択時だけ表示されます。Rank と Alpha はアダプター容量を制御し、Rank を上げると GPU メモリ使用量も増えます。",
+        "multimodal_params_guide": "ローカルモデル構成からビジョン構造を検出しました。ビジョンエンコーダ、プロジェクター、言語モデルの固定と画像・動画のピクセル上限を設定してください。",
         "show_advanced_label": "生成されたパラメータを手動で調整する",
         "show_advanced_info": "任意です。有効にすると技術設定とエキスパート設定が表示されます。",
         "priority_choices": (
@@ -3731,7 +3759,7 @@ WIZARD_GUIDANCE_LOCALES = {
         "tokens": "{value} トークン",
         "effective_batch": "{value} サンプル",
         "reason_balanced": "バランスモードはメモリ使用量を予測可能にしながら学習の安定性を維持します。",
-        "reason_memory": "省メモリモードはバッチを小さくし、対応時は4ビット読み込みを使用します。",
+        "reason_memory": "省メモリモードはステップ 1 で選択した量子化を維持しながら、バッチとコンテキスト長を抑えます。",
         "reason_speed": "速度モードは選択したハードウェアに余裕がある場合、デバイスバッチを増やします。",
         "reason_quality": "品質モードはハードウェアが対応できる場合、精度とコンテキスト長を維持します。",
         "result_footer": "この値のまま続行するか、ステップ 3 で必要な項目だけ変更してください。",
@@ -3965,6 +3993,18 @@ LOCALES.update(
         },
         "wizard_learning_params_guide": {
             lang: {"value": text["learning_params_guide"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_common_params": {
+            lang: {"label": text["common_params_label"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_common_params_guide": {
+            lang: {"value": text["common_params_guide"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_lora_params_guide": {
+            lang: {"value": text["lora_params_guide"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()
+        },
+        "wizard_multimodal_params_guide": {
+            lang: {"value": text["multimodal_params_guide"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()
         },
         "manual_settings": {
             lang: {"label": text["manual_settings"]} for lang, text in WIZARD_GUIDANCE_LOCALES.items()

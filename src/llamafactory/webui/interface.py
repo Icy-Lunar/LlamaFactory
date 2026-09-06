@@ -47,18 +47,47 @@ def create_ui(demo_mode: bool = False) -> "gr.Blocks":
     engine = Engine(demo_mode=demo_mode)
     hostname = os.getenv("HOSTNAME", os.getenv("COMPUTERNAME", platform.node())).split(".")[0]
 
-    with gr.Blocks(title=f"Cyrene Yield Training ({hostname})", css=CSS) as demo:
-        title = gr.HTML(elem_classes="product-title")
-        subtitle = gr.HTML(elem_classes="product-subtitle")
+    theme = gr.themes.Soft(
+        primary_hue="blue",
+        secondary_hue="blue",
+        neutral_hue="slate",
+    ).set(
+        block_label_background_fill="transparent",
+        block_label_background_fill_dark="transparent",
+        block_label_border_width="0px",
+        block_label_shadow="none",
+        block_label_padding="0px",
+        block_label_text_color="*body_text_color",
+        block_label_text_color_dark="*body_text_color",
+        block_title_background_fill="transparent",
+        block_title_text_color="*body_text_color",
+        block_title_text_color_dark="*body_text_color",
+        input_background_fill_dark="#101b2c",
+        input_border_color="#cbd6e5",
+        input_border_color_dark="#3a4c65",
+    )
+    with gr.Blocks(title=f"Cyrene Yield Training ({hostname})", theme=theme, css=CSS) as demo:
+        with gr.Row(elem_classes="product-header"):
+            with gr.Column(scale=3, min_width=280):
+                title = gr.HTML(elem_classes="product-title", padding=False)
+                subtitle = gr.HTML(elem_classes="product-subtitle", padding=False)
+
+            with gr.Row(elem_classes="enterprise-workspace-nav"):
+                train_workspace_btn = gr.Button(LOCALES["train_workspace_btn"]["en"]["value"], variant="primary")
+                if not demo_mode:
+                    merge_workspace_btn = gr.Button(LOCALES["merge_workspace_btn"]["en"]["value"])
+            lang = gr.Dropdown(
+                choices=["en", "ru", "zh", "ko", "ja"],
+                value="zh",
+                min_width=100,
+                scale=0,
+                elem_classes="compact-language-row",
+            )
+        engine.manager.add_elems("top", {"lang": lang})
         if demo_mode:
             gr.DuplicateButton(value="Duplicate Space for private use", elem_classes="duplicate-button")
 
         engine.manager.add_elems("head", {"title": title, "subtitle": subtitle})
-
-        with gr.Row(elem_classes="enterprise-workspace-nav"):
-            train_workspace_btn = gr.Button(LOCALES["train_workspace_btn"]["en"]["value"], variant="primary")
-            if not demo_mode:
-                merge_workspace_btn = gr.Button(LOCALES["merge_workspace_btn"]["en"]["value"])
 
         with gr.Column(elem_classes="enterprise-workspace-panel") as train_workspace:
             engine.manager.add_elems("train", create_train_tab(engine))

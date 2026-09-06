@@ -141,7 +141,7 @@ def create_export_tab(engine: "Engine") -> dict[str, "Component"]:
 
     checkpoint_path.change(can_quantize, [checkpoint_path], [export_quantization_bit], queue=False)
     checkpoint_path.focus(
-        list_checkpoints,
+        lambda name, method: list_checkpoints(name, method, reset_selection=False),
         [engine.manager.get_elem_by_id("top.model_name"), merge_finetuning_type],
         [checkpoint_path],
         queue=False,
@@ -154,7 +154,7 @@ def create_export_tab(engine: "Engine") -> dict[str, "Component"]:
             engine.manager.get_elem_by_id("top.model_name"),
             engine.manager.get_elem_by_id("top.model_path"),
             merge_finetuning_type,
-            engine.manager.get_elem_by_id("top.checkpoint_path"),
+            checkpoint_path,
             engine.manager.get_elem_by_id("top.template"),
             export_size,
             export_quantization_bit,

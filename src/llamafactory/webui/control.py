@@ -50,10 +50,12 @@ def can_quantize(finetuning_type: str) -> "gr.Dropdown":
         return gr.Dropdown(interactive=True)
 
 
-def can_quantize_to(quantization_method: str) -> "gr.Dropdown":
+def can_quantize_to(
+    quantization_method: str, quantization_bit: str = "none", finetuning_type: str = "lora"
+) -> "gr.Dropdown":
     r"""Get the available quantization bits.
 
-    Inputs: top.quantization_method
+    Inputs: top.quantization_method, top.quantization_bit, top.finetuning_type
     Outputs: top.quantization_bit
     """
     if quantization_method == QuantizationMethod.BNB:
@@ -62,8 +64,12 @@ def can_quantize_to(quantization_method: str) -> "gr.Dropdown":
         available_bits = ["none", "8", "6", "5", "4", "3", "2", "1"]
     elif quantization_method == QuantizationMethod.EETQ:
         available_bits = ["none", "8"]
+    else:
+        available_bits = ["none"]
 
-    return gr.Dropdown(choices=available_bits)
+    interactive = finetuning_type in PEFT_METHODS
+    selected_bit = quantization_bit if interactive and quantization_bit in available_bits else "none"
+    return gr.Dropdown(choices=available_bits, value=selected_bit, interactive=interactive)
 
 
 def change_stage(training_stage: str = list(TRAINING_STAGES.keys())[0]) -> tuple[list[str], bool]:
@@ -140,7 +146,7 @@ def get_trainer_info(lang: str, output_path: os.PathLike) -> tuple[str, "gr.Slid
     return running_log, running_progress, running_info
 
 
-def list_checkpoints(model_name: str, finetuning_type: str) -> "gr.Dropdown":
+def list_checkpoints(model_name: str, finetuning_type: str, reset_selection: bool = True) -> "gr.Dropdown":
     r"""List all available checkpoints.
 
     Inputs: top.model_name, top.finetuning_type
@@ -156,7 +162,9 @@ def list_checkpoints(model_name: str, finetuning_type: str) -> "gr.Dropdown":
                 ):
                     checkpoints.append(checkpoint)
 
-    if finetuning_type in PEFT_METHODS:
+    if not reset_selection:
+        return gr.Dropdown(choices=checkpoints, multiselect=finetuning_type in PEFT_METHODS)
+    elif finetuning_type in PEFT_METHODS:
         return gr.Dropdown(value=[], choices=checkpoints, multiselect=True)
     else:
         return gr.Dropdown(value=None, choices=checkpoints, multiselect=False)

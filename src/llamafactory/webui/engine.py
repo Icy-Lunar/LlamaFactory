@@ -50,7 +50,7 @@ class Engine:
         init_dict = {"top.lang": {"value": lang, **LOCALES["lang"][lang]}}
         current_time = get_time()
         init_dict["train.current_time"] = {"value": current_time}
-        init_dict["train.output_dir"] = {"value": f"train_{current_time}"}
+        init_dict["train.output_dir"] = {"value": f"train_{current_time}", **LOCALES["output_dir"][lang]}
 
         if user_config.get("last_model", None):
             init_dict["top.model_name"] = {

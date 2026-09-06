@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -71,6 +72,14 @@ def test_manual_batch_change_updates_peak_estimate() -> None:
     assert edited.estimated_gib > default.estimated_gib
 
 
+def test_user_quantization_choice_changes_memory_estimate() -> None:
+    shape = _qwen_shape()
+    unquantized = _estimate(shape, quantization_bit="none")
+    four_bit = _estimate(shape, quantization_bit="4")
+
+    assert four_bit.estimated_gib < unquantized.estimated_gib
+
+
 def test_zero_three_reduces_full_finetuning_memory_per_device() -> None:
     shape = _qwen_shape()
     single_device = _estimate(
@@ -122,6 +131,63 @@ def test_read_model_shape_sums_unique_indexed_weight_shards(tmp_path) -> None:
 def test_read_model_shape_rejects_non_local_model_identifier() -> None:
     with pytest.raises(ValueError, match="local directory"):
         read_model_shape("organization/remote-model")
+
+
+def test_read_model_shape_detects_multimodal_config(tmp_path) -> None:
+    config = {
+        "model_type": "qwen2_5_vl",
+        "text_config": {
+            "hidden_size": 16,
+            "intermediate_size": 32,
+            "num_attention_heads": 4,
+            "num_hidden_layers": 2,
+            "num_key_value_heads": 2,
+            "vocab_size": 64,
+        },
+        "vision_config": {
+            "hidden_size": 24,
+            "num_hidden_layers": 3,
+        },
+        "torch_dtype": "float16",
+    }
+    (tmp_path / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    (tmp_path / "model.safetensors").write_bytes(b"a" * 32)
+
+    shape = read_model_shape(str(tmp_path))
+
+    assert shape.is_multimodal is True
+    assert shape.vision_hidden_size == 24
+    assert shape.vision_num_hidden_layers == 3
+
+
+def test_multimodal_freeze_and_pixel_settings_change_memory_estimate() -> None:
+    shape = replace(
+        _qwen_shape(),
+        is_multimodal=True,
+        vision_hidden_size=1024,
+        vision_num_hidden_layers=24,
+    )
+    frozen = _estimate(
+        shape,
+        freeze_vision_tower=True,
+        image_max_pixels=224 * 224,
+        video_max_pixels=128 * 128,
+    )
+    trainable_vision = _estimate(
+        shape,
+        freeze_vision_tower=False,
+        image_max_pixels=224 * 224,
+        video_max_pixels=128 * 128,
+    )
+    larger_inputs = _estimate(
+        shape,
+        freeze_vision_tower=False,
+        image_max_pixels=1024 * 1024,
+        video_max_pixels=512 * 512,
+    )
+
+    assert trainable_vision.estimated_gib > frozen.estimated_gib
+    assert larger_inputs.estimated_gib > trainable_vision.estimated_gib
 
 
 def test_weight_scan_prefers_safetensors_and_ignores_duplicate_bin_format(tmp_path) -> None:
