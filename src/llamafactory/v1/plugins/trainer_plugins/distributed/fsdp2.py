@@ -96,6 +96,11 @@ def _make_norms_dtype_safe(model: HFModel) -> int:
     return n
 
 
+def is_lora_model(model: HFModel) -> bool:
+    """Return whether PEFT LoRA layers have already been injected into the model."""
+    return any(isinstance(module, LoraLayer) for module in model.modules())
+
+
 def get_transformer_layer_cls(model: HFModel) -> set[type[nn.Module]]:
     classes: set[type[nn.Module]] = set()
     for module in model.modules():
@@ -125,7 +130,8 @@ def save_model(model: HFModel, output_dir: str, processor: Processor) -> None:
     if DistributedInterface().get_rank() == 0:
         logger.info("Gathering state dict for saving...")
 
-    options = StateDictOptions(full_state_dict=True, cpu_offload=True)
+    lora_model = is_lora_model(model)
+    options = StateDictOptions(full_state_dict=True, cpu_offload=True, ignore_frozen_params=lora_model)
     state_dict = get_model_state_dict(model, options=options)
 
     if DistributedInterface().get_rank() == 0:
@@ -153,7 +159,8 @@ def save_checkpoint(model: HFModel, optimizer: torch.optim.Optimizer, ckpt_dir: 
         if DistributedInterface().get_rank() == 0:
             logger.info("Gathering state dict for saving additional HF format checkpoint...")
 
-        hf_options = StateDictOptions(full_state_dict=True, cpu_offload=True)
+        lora_model = is_lora_model(model)
+        hf_options = StateDictOptions(full_state_dict=True, cpu_offload=True, ignore_frozen_params=lora_model)
         hf_state_dict = get_model_state_dict(model, options=hf_options)
 
         if DistributedInterface().get_rank() == 0:
@@ -220,9 +227,9 @@ class FSDP2Engine:
         )
 
     def is_lora_module_wrap(self, model) -> bool:
-        return any(isinstance(module, LoraLayer) for module in model.modules())
+        return is_lora_model(model)
 
-    def prepare_model(self, model: HFModel) -> HFModel:
+    def prepare_model(self, model: HFModel, ignored_params: set[nn.Parameter] | None = None) -> HFModel:
         if self.fsdp_mesh is None:
             logger.warning("No FSDP Mesh available, skipping FSDP wrapping.")
             return model
@@ -238,8 +245,13 @@ class FSDP2Engine:
             names = ", ".join(cls.__name__ for cls in transformer_layer_cls_to_wrap)
             logger.info(f"Applying per-layer FSDP to: {names}")
 
-        # LoRA 叶子模块可能位于 Transformer block 内；先单独 shard 它们，再 shard 外层 block，
-        # 才能让可训练 adapter 保持独立的参数组和 state-dict 名称。
+        def _ignored_params_for(module: nn.Module) -> set[nn.Parameter] | None:
+            if not ignored_params:
+                return None
+            return ignored_params.intersection(module.parameters()) or None
+
+        # Shard trainable LoRA leaves before their outer Transformer blocks so
+        # adapter parameter groups and state-dict names remain independent.
         if self.is_lora_module_wrap(model):
             lora_modules = []
             for module in model.modules():
@@ -255,6 +267,7 @@ class FSDP2Engine:
                     reshard_after_forward=self.reshard_after_forward,
                     mp_policy=mp_policy,
                     offload_policy=CPUOffloadPolicy(pin_memory=self.pin_memory) if self.offload_params else None,
+                    ignored_params=_ignored_params_for(module),
                 )
 
             logger.info("Applying FSDP wrap for LoRA layer separately.")
@@ -275,6 +288,7 @@ class FSDP2Engine:
                     reshard_after_forward=self.reshard_after_forward,
                     mp_policy=mp_policy,
                     offload_policy=CPUOffloadPolicy(pin_memory=self.pin_memory) if self.offload_params else None,
+                    ignored_params=_ignored_params_for(module),
                 )
 
         # BaseTrainer is the single source of truth for gradient checkpointing.
@@ -303,6 +317,7 @@ class FSDP2Engine:
             reshard_after_forward=self.reshard_after_forward,
             mp_policy=mp_policy,
             offload_policy=CPUOffloadPolicy(pin_memory=self.pin_memory) if self.offload_params else None,
+            ignored_params=_ignored_params_for(model),
         )
 
         return model
