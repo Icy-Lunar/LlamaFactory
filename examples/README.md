@@ -189,32 +189,11 @@ llamafactory-cli export examples/merge_lora/qwen3_gptq.yaml
 llamafactory-cli export examples/merge_lora/qwen3_full_sft.yaml
 ```
 
-### Inferring LoRA Fine-Tuned Models
+### Quick Test after Training
 
-#### Evaluation using vLLM's Multi-GPU Inference
-
-```
-python scripts/vllm_infer.py --model_name_or_path Qwen/Qwen3-4B-Instruct-2507 --template qwen3_nothink --dataset alpaca_en_demo
-python scripts/eval_bleu_rouge.py generated_predictions.jsonl
-```
-
-#### Use CLI ChatBox
-
-```bash
-llamafactory-cli chat examples/inference/qwen3_lora_sft.yaml
-```
-
-#### Use Web UI ChatBox
-
-```bash
-llamafactory-cli webchat examples/inference/qwen3_lora_sft.yaml
-```
-
-#### Launch OpenAI-style API
-
-```bash
-llamafactory-cli api examples/inference/qwen3_lora_sft.yaml
-```
+Run `llamafactory-cli webui`, open **Quick test**, and select the local base-model directory. To test a
+LoRA checkpoint, also select its local adapter directory. The quick-test workspace uses Hugging Face
+Transformers only.
 
 ### Extras
 

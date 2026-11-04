@@ -15,14 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""在 Hugging Face、vLLM 与 SGLang 之上提供统一的同步、异步和流式聊天门面."""
+"""Provide synchronous, asynchronous, and streaming chat with Hugging Face Transformers."""
 
 import asyncio
 from collections.abc import AsyncGenerator, Generator
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Optional
 
-from ..extras.constants import EngineName
 from ..hparams import get_infer_args
 
 
@@ -37,7 +36,7 @@ def _start_background_loop(loop: "asyncio.AbstractEventLoop") -> None:
 
 
 class ChatModel:
-    r"""General class for chat models. Backed by huggingface or vllm engines.
+    r"""Hugging Face Transformers chat model.
 
     Supports both sync and async methods.
     Sync methods: chat(), stream_chat() and get_scores().
@@ -47,38 +46,23 @@ class ChatModel:
     def __init__(self, args: Optional[dict[str, Any]] = None) -> None:
         model_args, data_args, finetuning_args, generating_args = get_infer_args(args)
 
-        if model_args.infer_backend == EngineName.HF:
-            from .hf_engine import HuggingfaceEngine
+        from .hf_engine import HuggingfaceEngine
 
-            self.engine: BaseEngine = HuggingfaceEngine(model_args, data_args, finetuning_args, generating_args)
-        elif model_args.infer_backend == EngineName.VLLM:
-            try:
-                from .vllm_engine import VllmEngine
-
-                self.engine: BaseEngine = VllmEngine(model_args, data_args, finetuning_args, generating_args)
-            except ImportError as e:
-                raise ImportError(
-                    "vLLM not install, you may need to run `pip install vllm`\n"
-                    "or try to use HuggingFace backend: --infer_backend huggingface"
-                ) from e
-        elif model_args.infer_backend == EngineName.SGLANG:
-            try:
-                from .sglang_engine import SGLangEngine
-
-                self.engine: BaseEngine = SGLangEngine(model_args, data_args, finetuning_args, generating_args)
-            except ImportError as e:
-                raise ImportError(
-                    "SGLang not install, you may need to run `pip install sglang[all]`\n"
-                    "or try to use HuggingFace backend: --infer_backend huggingface"
-                ) from e
-        else:
-            raise NotImplementedError(f"Unknown backend: {model_args.infer_backend}")
-
-        # 同步 API 通过 run_coroutine_threadsafe 投递到这个常驻事件循环，
-        # 从而与 vLLM/SGLang 的异步引擎共享同一实现，也避免每次请求反复 asyncio.run。
+        self.engine: BaseEngine = HuggingfaceEngine(model_args, data_args, finetuning_args, generating_args)
         self._loop = asyncio.new_event_loop()
         self._thread = Thread(target=_start_background_loop, args=(self._loop,), daemon=True)
         self._thread.start()
+
+    def close(self) -> None:
+        r"""Stop the synchronous bridge loop after unloading the model."""
+        loop = getattr(self, "_loop", None)
+        thread = getattr(self, "_thread", None)
+        if loop is not None and loop.is_running():
+            loop.call_soon_threadsafe(loop.stop)
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=2)
+        if loop is not None and not loop.is_closed():
+            loop.close()
 
     def chat(
         self,

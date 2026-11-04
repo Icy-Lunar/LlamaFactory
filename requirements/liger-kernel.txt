@@ -1,1 +1,4 @@
-liger-kernel>=0.8.0
+# Windows is installed through scripts/install_windows_liger.py so that an
+# existing triton-windows/XPU provider is retained instead of resolving the
+# upstream Linux distribution named "triton".
+liger-kernel>=0.8.0; platform_system != "Windows"

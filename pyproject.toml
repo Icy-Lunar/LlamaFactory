@@ -49,10 +49,11 @@ dependencies = [
     # gui
     "gradio>=4.38.0,<=5.50.0",
     "matplotlib>=3.7.0",
+    "tensorboard>=2.14.0,<=2.21.0",
     "tyro<0.9.0",
     # ops
+    "bitsandbytes>=0.48.0,<=0.50.2",
     "einops",
-    "liger-kernel>=0.8.0",
     "numpy",
     "pandas",
     "scipy",
@@ -75,6 +76,12 @@ dependencies = [
     "fastapi",
     "sse-starlette",
 ]
+
+[project.optional-dependencies]
+# Installed by the hardware-aware bootstrap only when its backend is available.
+# The hardware-aware bootstrap installs an adapted Liger wheel on Windows so
+# pip cannot replace triton-windows/XPU Triton with the Linux-only distribution.
+liger = ["liger-kernel>=0.8.0; platform_system != 'Windows'"]
 
 [project.scripts]
 llamafactory-cli = "llamafactory.cli:main"

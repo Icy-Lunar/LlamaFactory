@@ -14,7 +14,9 @@
 
 from typing import TYPE_CHECKING, Any
 
+from .chatter import WebChatModel
 from .common import create_ds_config, get_time, load_config
+from .help import field_help
 from .locales import LOCALES
 from .manager import Manager
 from .runner import Runner
@@ -31,15 +33,21 @@ class Engine:
         self.demo_mode = demo_mode
         self.manager = Manager()
         self.runner = Runner(self.manager, demo_mode)
+        self.chatter = WebChatModel(demo_mode)
         if not demo_mode:
             create_ds_config()
 
-    def _update_component(self, input_dict: dict[str, dict[str, Any]]) -> dict["Component", "Component"]:
+    def _update_component(
+        self, input_dict: dict[str, dict[str, Any]], lang: str = "en"
+    ) -> dict["Component", "Component"]:
         r"""Update gradio components according to the (elem_id, properties) mapping."""
         output_dict: dict[Component, Component] = {}
         for elem_id, elem_attr in input_dict.items():
             elem = self.manager.get_elem_by_id(elem_id)
-            output_dict[elem] = elem.__class__(**elem_attr)
+            properties = dict(elem_attr)
+            if properties.get("info"):
+                properties["info"] = field_help(properties.get("label", elem_id), properties["info"], lang, elem_id)
+            output_dict[elem] = elem.__class__(**properties)
 
         return output_dict
 
@@ -51,6 +59,8 @@ class Engine:
         current_time = get_time()
         init_dict["train.current_time"] = {"value": current_time}
         init_dict["train.output_dir"] = {"value": f"train_{current_time}", **LOCALES["output_dir"][lang]}
+        if self.manager.has_elem("chat.chat_box"):
+            init_dict["chat.chat_box"] = {"visible": self.chatter.loaded}
 
         if user_config.get("last_model", None):
             init_dict["top.model_name"] = {
@@ -64,9 +74,14 @@ class Engine:
                 "value": user_config["last_model_path"],
                 **LOCALES["model_path"][lang],
             }
+            if self.manager.has_elem("chat.chat_model_path"):
+                init_dict["chat.chat_model_path"] = {
+                    "value": user_config["last_model_path"],
+                    **LOCALES["chat_model_path"][lang],
+                }
 
         initial_updates = self.change_lang(lang)
-        initial_updates.update(self._update_component(init_dict))
+        initial_updates.update(self._update_component(init_dict, lang))
         yield initial_updates
 
         if self.runner.running and not self.demo_mode:
@@ -81,8 +96,14 @@ class Engine:
 
     def change_lang(self, lang: str):
         r"""Update the displayed language of gradio components."""
-        return {
-            elem: elem.__class__(**LOCALES[elem_name][lang])
-            for elem_name, elem in self.manager.get_elem_iter()
-            if elem_name in LOCALES
-        }
+        updates = {}
+        for elem_name, elem in self.manager.get_elem_iter():
+            if elem_name not in LOCALES:
+                continue
+            properties = dict(LOCALES[elem_name][lang])
+            if properties.get("info"):
+                properties["info"] = field_help(
+                    properties.get("label", elem_name), properties["info"], lang, self.manager.get_id_by_elem(elem)
+                )
+            updates[elem] = elem.__class__(**properties)
+        return updates

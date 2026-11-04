@@ -154,8 +154,6 @@ class AttentionFunction(StrEnum):
 
 class EngineName(StrEnum):
     HF = "huggingface"
-    VLLM = "vllm"
-    SGLANG = "sglang"
 
 
 class DownloadSource(StrEnum):

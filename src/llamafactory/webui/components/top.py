@@ -15,11 +15,11 @@
 from typing import TYPE_CHECKING
 
 from ...data import TEMPLATES
-from ...extras.constants import METHODS
+from ...extras.liger import get_local_liger_status
 from ...extras.packages import is_gradio_available
 from ..common import save_config
 from ..control import can_quantize, can_quantize_to, check_template, get_local_model_info, list_checkpoints
-from ..locales import LOCALES
+from ..locales import LIGER_LOCALES, LOCALES
 
 
 if is_gradio_available():
@@ -28,6 +28,16 @@ if is_gradio_available():
 
 if TYPE_CHECKING:
     from gradio.components import Component
+
+
+def update_booster(lang: str, model_path: str | None, compute_type: str = "bf16"):
+    text = LIGER_LOCALES.get(lang, LIGER_LOCALES["en"])
+    status = get_local_liger_status(model_path, compute_type)
+    return gr.Dropdown(
+        choices=[(text["available"], "liger_kernel"), (text["standard"], "none")],
+        value="liger_kernel" if status.enabled else "none",
+        interactive=False,
+    )
 
 
 def create_top(lang: "Component | None" = None) -> dict[str, "Component"]:
@@ -40,7 +50,7 @@ def create_top(lang: "Component | None" = None) -> dict[str, "Component"]:
         model_path = gr.Textbox(scale=1)
 
     with gr.Row():
-        finetuning_type = gr.Dropdown(choices=METHODS, value="lora", scale=1)
+        finetuning_type = gr.Dropdown(choices=LOCALES["finetuning_type"]["en"]["choices"], value="lora", scale=1)
         quantization_bit = gr.Dropdown(choices=["none", "8", "4"], value="none", scale=1)
 
     with gr.Accordion(LOCALES["manual_settings"]["en"]["label"], open=False) as manual_settings:
@@ -48,10 +58,10 @@ def create_top(lang: "Component | None" = None) -> dict[str, "Component"]:
             checkpoint_path = gr.Dropdown(multiselect=True, allow_custom_value=True, scale=6)
 
         with gr.Row():
-            quantization_method = gr.Dropdown(choices=["bnb", "hqq", "eetq"], value="bnb")
+            quantization_method = gr.Dropdown(choices=[("bitsandbytes (bnb)", "bnb")], value="bnb", interactive=False)
             template = gr.Dropdown(choices=list(TEMPLATES.keys()), value="default")
             rope_scaling = gr.Dropdown(choices=["none", "linear", "dynamic", "yarn", "llama3"], value="none")
-            booster = gr.Dropdown(choices=["liger_kernel", "flashattn2", "unsloth"], value="liger_kernel")
+            booster = update_booster("en", None)
 
     model_path.input(get_local_model_info, [model_path], [model_name, template], queue=False).then(
         save_config, inputs=[lang, model_name, model_path], queue=False

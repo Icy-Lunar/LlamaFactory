@@ -79,13 +79,6 @@ def print_env() -> None:
         pass
 
     try:
-        import vllm
-
-        info["vLLM version"] = vllm.__version__
-    except Exception:
-        pass
-
-    try:
         import subprocess
 
         commit_info = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)

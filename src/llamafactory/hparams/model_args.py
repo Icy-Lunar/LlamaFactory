@@ -15,16 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import os
 from dataclasses import asdict, dataclass, field, fields
 from typing import Any, Literal, Self
 
 import torch
 from omegaconf import OmegaConf
-from transformers.training_args import _convert_str_dict
 
-from ..extras.constants import AttentionFunction, EngineName, QuantizationMethod, RopeScaling
+from ..extras.constants import AttentionFunction, QuantizationMethod, RopeScaling
 from ..extras.logging import get_logger
 
 
@@ -159,10 +157,6 @@ class BaseModelArguments:
     train_from_scratch: bool = field(
         default=False,
         metadata={"help": "Whether or not to randomly initialize the model weights."},
-    )
-    infer_backend: EngineName = field(
-        default=EngineName.HF,
-        metadata={"help": "Backend engine used at inference."},
     )
     offload_folder: str = field(
         default="offload",
@@ -396,68 +390,6 @@ class ExportArguments:
 
 
 @dataclass
-class VllmArguments:
-    r"""Arguments pertaining to the vLLM worker."""
-
-    vllm_maxlen: int = field(
-        default=4096,
-        metadata={"help": "Maximum sequence (prompt + response) length of the vLLM engine."},
-    )
-    vllm_gpu_util: float = field(
-        default=0.7,
-        metadata={"help": "The fraction of GPU memory in (0,1) to be used for the vLLM engine."},
-    )
-    vllm_enforce_eager: bool = field(
-        default=False,
-        metadata={"help": "Whether or not to disable CUDA graph in the vLLM engine."},
-    )
-    vllm_max_lora_rank: int = field(
-        default=32,
-        metadata={"help": "Maximum rank of all LoRAs in the vLLM engine."},
-    )
-    vllm_config: dict | str | None = field(
-        default=None,
-        metadata={"help": "Config to initialize the vllm engine. Please use JSON strings."},
-    )
-
-    def __post_init__(self):
-        if isinstance(self.vllm_config, str) and self.vllm_config.startswith("{"):
-            self.vllm_config = _convert_str_dict(json.loads(self.vllm_config))
-
-
-@dataclass
-class SGLangArguments:
-    r"""Arguments pertaining to the SGLang worker."""
-
-    sglang_maxlen: int = field(
-        default=4096,
-        metadata={"help": "Maximum sequence (prompt + response) length of the SGLang engine."},
-    )
-    sglang_mem_fraction: float = field(
-        default=0.7,
-        metadata={"help": "The memory fraction (0-1) to be used for the SGLang engine."},
-    )
-    sglang_tp_size: int = field(
-        default=-1,
-        metadata={"help": "Tensor parallel size for the SGLang engine."},
-    )
-    sglang_config: dict | str | None = field(
-        default=None,
-        metadata={"help": "Config to initialize the SGLang engine. Please use JSON strings."},
-    )
-    sglang_lora_backend: Literal["triton", "flashinfer"] = field(
-        default="triton",
-        metadata={
-            "help": "The backend of running GEMM kernels for Lora modules. Recommend using the Triton LoRA backend for better performance and stability."
-        },
-    )
-
-    def __post_init__(self):
-        if isinstance(self.sglang_config, str) and self.sglang_config.startswith("{"):
-            self.sglang_config = _convert_str_dict(json.loads(self.sglang_config))
-
-
-@dataclass
 class KTransformersArguments:
     r"""Arguments pertaining to KTransformers AMX MoE SFT training.
 
@@ -538,8 +470,6 @@ class KTransformersArguments:
 
 @dataclass
 class ModelArguments(
-    SGLangArguments,
-    VllmArguments,
     KTransformersArguments,
     ExportArguments,
     ProcessorArguments,
@@ -576,8 +506,6 @@ class ModelArguments(
         BaseModelArguments.__post_init__(self)
         ProcessorArguments.__post_init__(self)
         ExportArguments.__post_init__(self)
-        VllmArguments.__post_init__(self)
-        SGLangArguments.__post_init__(self)
 
     @classmethod
     def copyfrom(cls, source: "Self", **kwargs) -> "Self":

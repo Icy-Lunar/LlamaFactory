@@ -1,4 +1,4 @@
-> **Cyrene Yield training edition:** local-only, four-step guided training with selectable fine-tuning and quantization, multimodal controls, live and preflight VRAM estimates, and adapter merge. See the [current guide](docs/CYRENE_YIELD_WEBUI.md) and [2026-09-06 improvements](docs/WEBUI_IMPROVEMENTS_2026-09-06.md).
+> **Cyrene Yield training edition:** local-only, four-step guided training, Hugging Face quick-test chat, live and preflight VRAM estimates, and adapter merge. See the [current guide](docs/CYRENE_YIELD_WEBUI.md) and [2026-09-06 improvements](docs/WEBUI_IMPROVEMENTS_2026-09-06.md).
 
 ![# LlamaFactory](assets/logo.png)
 
@@ -92,7 +92,7 @@ Read technical notes:
   - [Quickstart](#quickstart)
   - [Fine-Tuning with LLaMA Board GUI](#fine-tuning-with-llama-board-gui-powered-by-gradio)
   - [Build Docker](#build-docker)
-  - [Deploy with OpenAI-style API and vLLM](#deploy-with-openai-style-api-and-vllm)
+  - [Quick-test a local model](#quick-test-a-local-model)
   - [Download from ModelScope Hub](#download-from-modelscope-hub)
   - [Download from Modelers Hub](#download-from-modelers-hub)
   - [Use W&B Logger](#use-wb-logger)
@@ -111,7 +111,7 @@ Read technical notes:
 - **Practical tricks**: [FlashAttention-2](https://github.com/Dao-AILab/flash-attention), [Unsloth](https://github.com/unslothai/unsloth), [Liger Kernel](https://github.com/linkedin/Liger-Kernel), [KTransformers](https://github.com/kvcache-ai/ktransformers/), RoPE scaling, NEFTune and rsLoRA.
 - **Wide tasks**: Multi-turn dialogue, tool using, image understanding, visual grounding, video recognition, audio understanding, etc.
 - **Experiment monitors**: LlamaBoard, TensorBoard, Wandb, MLflow, [SwanLab](https://github.com/SwanHubX/SwanLab), etc.
-- **Faster inference**: OpenAI-style API, Gradio UI and CLI with [vLLM worker](https://github.com/vllm-project/vllm) or [SGLang worker](https://github.com/sgl-project/sglang).
+- **Quick model test**: load a local base model or LoRA checkpoint in the WebUI with the Hugging Face Transformers backend.
 
 ### Day-N Support for Fine-Tuning Cutting-Edge Models
 
@@ -169,7 +169,6 @@ Read technical notes:
 
 [25/03/31] We supported fine-tuning the **[Qwen2.5 Omni](https://qwenlm.github.io/blog/qwen2.5-omni/)** model. See [PR #7537](https://github.com/hiyouga/LlamaFactory/pull/7537) to get started.
 
-[25/03/15] We supported **[SGLang](https://github.com/sgl-project/sglang)** as inference backend. Try `infer_backend: sglang` to accelerate inference.
 
 [25/03/12] We supported fine-tuning the **[Gemma 3](https://huggingface.co/blog/gemma3)** model.
 
@@ -237,7 +236,6 @@ Read technical notes:
 
 [24/03/07] We supported **[GaLore](https://arxiv.org/abs/2403.03507)** optimizer. See [examples](examples/README.md) for usage.
 
-[24/03/07] We integrated **[vLLM](https://github.com/vllm-project/vllm)** for faster and concurrent inference. Try `infer_backend: vllm` to enjoy **270%** inference speed.
 
 [24/02/28] We supported weight-decomposed LoRA (**[DoRA](https://arxiv.org/abs/2402.09353)**). Try `use_dora: true` to activate DoRA training.
 
@@ -499,7 +497,6 @@ huggingface-cli login
 | CUDA         | 11.6    | 12.2      |
 | deepspeed    | 0.10.0  | 0.16.4    |
 | bitsandbytes | 0.39.0  | 0.43.1    |
-| vllm         | 0.4.3   | 0.8.2     |
 | flash-attn   | 2.5.6   | 2.7.2     |
 
 ### Hardware Requirement
@@ -672,11 +669,10 @@ You can also use **[Easy Dataset](https://github.com/ConardLi/easy-dataset)**, *
 
 ### Quickstart
 
-Use the following 3 commands to run LoRA **fine-tuning**, **inference** and **merging** of the Qwen3-4B-Instruct model, respectively.
+Use the following commands to run LoRA **fine-tuning** and **merging**. Use the WebUI quick-test workspace for local Hugging Face inference.
 
 ```bash
 llamafactory-cli train examples/train_lora/qwen3_lora_sft.yaml
-llamafactory-cli chat examples/inference/qwen3_lora_sft.yaml
 llamafactory-cli export examples/merge_lora/qwen3_lora_sft.yaml
 ```
 
@@ -807,16 +803,9 @@ When building the Docker image, use `-v ./hf_cache:/root/.cache/huggingface` arg
 
 </details>
 
-### Deploy with OpenAI-style API and vLLM
+### Quick-test a local model
 
-```bash
-API_PORT=8000 llamafactory-cli api examples/inference/qwen3.yaml infer_backend=vllm vllm_enforce_eager=true
-```
-
-> [!TIP]
-> Visit [this page](https://platform.openai.com/docs/api-reference/chat/create) for API document.
->
-> Examples: [Image understanding](scripts/api_example/test_image.py) | [Function calling](scripts/api_example/test_toolcall.py)
+Run `llamafactory-cli webui`, open the **Quick test** workspace, and select a local model directory. This product uses only the Hugging Face Transformers inference backend.
 
 ### Download from ModelScope Hub
 

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""基于 Transformers generate 实现本地聊天、流式生成和奖励打分."""
+"""Implement local chat, streaming generation, and scoring with Transformers generate."""
 
 import asyncio
 import os

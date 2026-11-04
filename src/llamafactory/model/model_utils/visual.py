@@ -125,17 +125,6 @@ class LlavaMultiModalProjectorForYiVL(torch.nn.Module):
         return hidden_states
 
 
-class LlavaMultiModalProjectorForYiVLForVLLM(LlavaMultiModalProjectorForYiVL):
-    def __init__(self, vision_hidden_size: int, text_hidden_size: int, projector_hidden_act: str) -> None:
-        super().__init__(config=None)
-
-        self.linear_1 = torch.nn.Linear(vision_hidden_size, text_hidden_size, bias=True)
-        self.linear_2 = torch.nn.LayerNorm(text_hidden_size, bias=True)
-        self.linear_3 = torch.nn.Linear(text_hidden_size, text_hidden_size, bias=True)
-        self.linear_4 = torch.nn.LayerNorm(text_hidden_size, bias=True)
-        self.act = ACT2FN[projector_hidden_act]
-
-
 def autocast_projector_dtype(model: "PreTrainedModel", model_args: "ModelArguments") -> None:
     r"""Cast projector output to half precision for fine-tuning quantized VLMs."""
 

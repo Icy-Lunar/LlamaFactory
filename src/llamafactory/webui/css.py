@@ -97,14 +97,68 @@ CSS = r"""
 }
 
 .enterprise-workspace-nav {
-  flex: 0 1 340px !important;
-  width: min(100%, 340px);
+  flex: 0 1 520px !important;
+  width: min(100%, 520px);
   margin: 0;
   gap: 5px !important;
   padding: 5px;
   border: 1px solid var(--border-color-primary);
   border-radius: 14px;
   background: color-mix(in srgb, var(--background-fill-primary) 92%, transparent);
+}
+
+.chat-page-header-wrap {
+  padding: 18px 4px 8px;
+}
+
+.chat-page-header span {
+  color: var(--cy-accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+}
+
+.chat-page-header h2 {
+  margin: 5px 0 6px;
+  font-size: clamp(22px, 2vw, 28px);
+  letter-spacing: -0.025em;
+}
+
+.chat-page-header p {
+  max-width: 780px;
+  margin: 0;
+  color: var(--body-text-color-subdued);
+  line-height: 1.6;
+}
+
+.chat-config-card,
+.chat-session-card {
+  padding: 18px !important;
+  border: 1px solid var(--border-color-primary) !important;
+  border-radius: 16px !important;
+  background: var(--background-fill-primary) !important;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.035);
+}
+
+.chat-config-card {
+  gap: 18px !important;
+  margin-bottom: 12px;
+}
+
+.chat-model-actions {
+  justify-content: flex-end;
+  gap: 10px !important;
+}
+
+.chat-model-actions button {
+  flex: 0 1 220px !important;
+  min-height: 44px;
+  border-radius: 10px !important;
+  font-weight: 650 !important;
+}
+
+.chat-session-card {
+  margin-top: 14px;
 }
 
 .enterprise-workspace-nav button {
@@ -824,6 +878,107 @@ CSS = r"""
   .oobe-memory-grid {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* Field help remains local to its component: hover, keyboard focus, or tap. */
+.gradio-container .block:has(.field-help) {
+  overflow: visible !important;
+  position: relative;
+}
+
+.gradio-container .block:has(.field-help:hover),
+.gradio-container .block:has(.field-help:focus-within) {
+  z-index: 1100 !important;
+}
+
+.gradio-container :is(.form, .styler, .gr-group):has(.field-help:hover),
+.gradio-container :is(.form, .styler, .gr-group):has(.field-help:focus-within) {
+  overflow: visible !important;
+}
+
+.gradio-container .field-help {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  z-index: 30;
+  font-weight: 400;
+}
+
+.gradio-container .field-help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--cy-line);
+  border-radius: 50%;
+  background: var(--input-background-fill);
+  color: var(--cy-muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.gradio-container .field-help-trigger::before {
+  content: "?";
+}
+
+.gradio-container .field-help-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.gradio-container .field-help-trigger:hover,
+.gradio-container .field-help-trigger:focus-visible {
+  color: var(--cy-text);
+  border-color: #60a5fa;
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+.gradio-container .field-help-content {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(320px, calc(100vw - 64px));
+  padding: 12px 14px;
+  border: 1px solid var(--cy-line);
+  border-radius: 10px;
+  background: var(--input-background-fill);
+  color: var(--cy-text) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  line-height: 1.65;
+  font-size: 13px;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: auto;
+}
+
+.gradio-container .field-help:hover .field-help-content,
+.gradio-container .field-help:focus-within .field-help-content {
+  display: block;
+}
+
+.gradio-container .block:has(.field-help) [data-testid="block-info"],
+.gradio-container .block:has(.field-help) > label > span {
+  padding-right: 32px;
+}
+
+.gradio-container div:has(> .md > p > .field-help),
+.gradio-container div:has(> .md > .field-help) {
+  margin-bottom: 0 !important;
+  height: 0;
 }
 
 .modal-box {

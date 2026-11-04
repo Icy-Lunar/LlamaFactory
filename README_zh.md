@@ -1,4 +1,4 @@
-> **Cyrene Yield 训练版：** WebUI 提供仅本地模型的四步引导式训练、自选微调与量化、多模态参数、实时及启动前显存估算和适配器合并。请查看[现行说明](docs/CYRENE_YIELD_WEBUI.md)及 [2026-09-06 改进点](docs/WEBUI_IMPROVEMENTS_2026-09-06.md)。
+> **Cyrene Yield 训练版：** WebUI 提供仅本地模型的四步引导式训练、Hugging Face 快速对话测试、实时及启动前显存估算和适配器合并。第一次使用请直接阅读[零基础完整使用手册](BEGINNER_GUIDE_ZH.md)；维护与实现细节见[现行说明](docs/CYRENE_YIELD_WEBUI.md)及 [2026-09-06 改进点](docs/WEBUI_IMPROVEMENTS_2026-09-06.md)。
 
 ![# LlamaFactory](assets/logo.png)
 
@@ -93,7 +93,7 @@ https://github.com/user-attachments/assets/43b700c6-a178-41db-b1f8-8190a5d3fcfc
   - [快速开始](#快速开始)
   - [LLaMA Board 可视化微调](#llama-board-可视化微调由-gradio-驱动)
   - [构建 Docker](#构建-docker)
-  - [利用 vLLM 部署 OpenAI API](#利用-vllm-部署-openai-api)
+  - [快速测试本地模型](#快速测试本地模型)
   - [从魔搭社区下载](#从魔搭社区下载)
   - [从魔乐社区下载](#从魔乐社区下载)
   - [使用 W&B 面板](#使用-wb-面板)
@@ -112,7 +112,7 @@ https://github.com/user-attachments/assets/43b700c6-a178-41db-b1f8-8190a5d3fcfc
 - **实用技巧**：[FlashAttention-2](https://github.com/Dao-AILab/flash-attention)、[Unsloth](https://github.com/unslothai/unsloth)、[Liger Kernel](https://github.com/linkedin/Liger-Kernel)、[KTransformers](https://github.com/kvcache-ai/ktransformers/)、RoPE scaling、NEFTune 和 rsLoRA。
 - **广泛任务**：多轮对话、工具调用、图像理解、视觉定位、视频识别和语音理解等等。
 - **实验监控**：LlamaBoard、TensorBoard、Wandb、MLflow、[SwanLab](https://github.com/SwanHubX/SwanLab) 等等。
-- **极速推理**：基于 [vLLM](https://github.com/vllm-project/vllm) 或 [SGLang](https://github.com/sgl-project/sglang) 的 OpenAI 风格 API、浏览器界面和命令行接口。
+- **快速测试**：在 WebUI 中使用 Hugging Face Transformers 加载本地基础模型或 LoRA 检查点并进行对话测试。
 
 ### 最新模型的 Day-N 微调适配
 
@@ -170,7 +170,6 @@ https://github.com/user-attachments/assets/43b700c6-a178-41db-b1f8-8190a5d3fcfc
 
 [25/03/31] 我们支持了 **[Qwen2.5 Omni](https://qwenlm.github.io/blog/qwen2.5-omni/)** 模型的微调。查看 [PR #7537](https://github.com/hiyouga/LlamaFactory/pull/7537) 以使用。
 
-[25/03/15] 我们支持了 **[SGLang](https://github.com/sgl-project/sglang)** 推理后端，请使用 `infer_backend: sglang` 启用。
 
 [25/03/12] 我们支持了 **[Gemma 3](https://huggingface.co/blog/gemma3)** 模型的微调。
 
@@ -238,7 +237,6 @@ https://github.com/user-attachments/assets/43b700c6-a178-41db-b1f8-8190a5d3fcfc
 
 [24/03/07] 我们支持了 **[GaLore](https://arxiv.org/abs/2403.03507)** 优化器。详细用法请参照 [examples](examples/README_zh.md)。
 
-[24/03/07] 我们集成了 **[vLLM](https://github.com/vllm-project/vllm)** 以实现极速并发推理。请使用 `infer_backend: vllm` 来获得 **270%** 的推理速度。
 
 [24/02/28] 我们支持了 **[DoRA](https://arxiv.org/abs/2402.09353)** 微调。请使用 `use_dora: true` 参数进行 DoRA 微调。
 
@@ -500,7 +498,6 @@ huggingface-cli login
 | CUDA         | 11.6    | 12.2      |
 | deepspeed    | 0.10.0  | 0.16.4    |
 | bitsandbytes | 0.39.0  | 0.43.1    |
-| vllm         | 0.4.3   | 0.8.2     |
 | flash-attn   | 2.5.6   | 2.7.2     |
 
 ### 硬件依赖
@@ -672,11 +669,10 @@ pip install .
 
 ### 快速开始
 
-下面三行命令分别对 Qwen3-4B-Instruct 模型进行 LoRA **微调**、**推理**和**合并**。
+下面两行命令分别对 Qwen3-4B-Instruct 模型进行 LoRA **微调**和**合并**。本地 Hugging Face 推理请使用 WebUI 的“快速测试”工作区。
 
 ```bash
 llamafactory-cli train examples/train_lora/qwen3_lora_sft.yaml
-llamafactory-cli chat examples/inference/qwen3_lora_sft.yaml
 llamafactory-cli export examples/merge_lora/qwen3_lora_sft.yaml
 ```
 
@@ -809,16 +805,9 @@ docker exec -it llamafactory bash
 
 </details>
 
-### 利用 vLLM 部署 OpenAI API
+### 快速测试本地模型
 
-```bash
-API_PORT=8000 llamafactory-cli api examples/inference/qwen3.yaml infer_backend=vllm vllm_enforce_eager=true
-```
-
-> [!TIP]
-> API 文档请查阅[这里](https://platform.openai.com/docs/api-reference/chat/create)。
->
-> 示例：[图像理解](scripts/api_example/test_image.py) | [工具调用](scripts/api_example/test_toolcall.py)
+运行 `llamafactory-cli webui`，打开“快速测试”工作区并选择本地模型目录。本产品只使用 Hugging Face Transformers 推理后端。
 
 ### 从魔搭社区下载
 

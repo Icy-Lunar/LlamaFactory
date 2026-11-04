@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .chat import create_chat_tab
 from .export import create_export_tab
 from .footer import create_footer
 from .top import create_top
@@ -19,6 +20,7 @@ from .train import create_train_tab
 
 
 __all__ = [
+    "create_chat_tab",
     "create_export_tab",
     "create_footer",
     "create_top",

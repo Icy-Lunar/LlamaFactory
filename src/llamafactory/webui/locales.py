@@ -12,6 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .acceleration_locales import LIGER_LOCALES as LIGER_LOCALES
+from .chat_locales import CHAT_LOCALES
+from .help_locales import FIELD_HELP, FINETUNING_LABELS, QUANTIZATION_LABELS
+from .preview_locales import PREVIEW_LOCALES
+from .stage_locales import STAGE_GOAL_CHOICES, STAGE_LOCALES
+
+
+def get_finetuning_label(method: str, lang: str | None = "en") -> str:
+    return FINETUNING_LABELS.get(lang or "en", FINETUNING_LABELS["en"]).get(method, method)
+
+
 LOCALES = {
     "title": {
         "en": {
@@ -34,34 +45,37 @@ LOCALES = {
         "en": {
             "value": (
                 "<p><center>Local-only model workflow · automatic configuration · VRAM safety check · "
-                "adapter merge · <a href='https://github.com/DoHorizon-AI/Cyrene-Yield' target='_blank'>"
+                "Hugging Face quick test · adapter merge · "
+                "<a href='https://github.com/DoHorizon-AI/Cyrene-Yield' target='_blank'>"
                 "project repository</a></center></p>"
             ),
         },
         "ru": {
             "value": (
                 "<p><center>Локальные модели · автоматическая настройка · проверка видеопамяти · "
-                "слияние адаптеров · <a href='https://github.com/DoHorizon-AI/Cyrene-Yield' target='_blank'>"
+                "быстрый тест Hugging Face · слияние адаптеров · "
+                "<a href='https://github.com/DoHorizon-AI/Cyrene-Yield' target='_blank'>"
                 "репозиторий проекта</a></center></p>"
             ),
         },
         "zh": {
             "value": (
-                "<p><center>仅使用本地模型 · 自动生成配置 · 训练前显存检查 · 适配器合并 · "
+                "<p><center>仅使用本地模型 · 自动生成配置 · 训练前显存检查 · Hugging Face 快速测试 · 适配器合并 · "
                 "<a href='https://github.com/DoHorizon-AI/Cyrene-Yield' target='_blank'>项目仓库</a>"
                 "</center></p>"
             ),
         },
         "ko": {
             "value": (
-                "<p><center>로컬 모델 전용 · 자동 구성 · 학습 전 GPU 메모리 확인 · 어댑터 병합 · "
+                "<p><center>로컬 모델 전용 · 자동 구성 · 학습 전 GPU 메모리 확인 · Hugging Face 빠른 테스트 · 어댑터 병합 · "
                 "<a href='https://github.com/DoHorizon-AI/Cyrene-Yield' target='_blank'>프로젝트 저장소</a>"
                 "</center></p>"
             ),
         },
         "ja": {
             "value": (
-                "<p><center>ローカルモデル専用 · 自動構成 · 学習前の GPU メモリ確認 · アダプターマージ · "
+                "<p><center>ローカルモデル専用 · 自動構成 · 学習前の GPU メモリ確認 · Hugging Face クイックテスト · "
+                "アダプターマージ · "
                 "<a href='https://github.com/DoHorizon-AI/Cyrene-Yield' target='_blank'>プロジェクトリポジトリ</a>"
                 "</center></p>"
             ),
@@ -2387,23 +2401,6 @@ LOCALES = {
             "label": "予測結果を保存",
         },
     },
-    "infer_backend": {
-        "en": {
-            "label": "Inference engine",
-        },
-        "ru": {
-            "label": "Инференс движок",
-        },
-        "zh": {
-            "label": "推理引擎",
-        },
-        "ko": {
-            "label": "추론 엔진",
-        },
-        "ja": {
-            "label": "推論エンジン",
-        },
-    },
     "infer_dtype": {
         "en": {
             "label": "Inference data type",
@@ -3323,6 +3320,7 @@ WIZARD_SUMMARY_LOCALES = {
         "missing_output": "Not provided",
         "no_quantization": "No quantization",
         "quantization": "{bit}-bit QLoRA",
+        "xpu_acceleration": "Intel XPU compatibility mode",
         "title": "Configuration summary",
         "subtitle": "Review these settings before starting training",
         "labels": ("Model", "Finetuning", "Training task", "Learning", "Batch", "Sequence & precision", "Output"),
@@ -3345,6 +3343,7 @@ WIZARD_SUMMARY_LOCALES = {
         "missing_output": "Не указано",
         "no_quantization": "Без квантования",
         "quantization": "QLoRA, {bit} бит",
+        "xpu_acceleration": "Режим совместимости Intel XPU",
         "title": "Сводка конфигурации",
         "subtitle": "Проверьте параметры перед запуском обучения",
         "labels": (
@@ -3375,6 +3374,7 @@ WIZARD_SUMMARY_LOCALES = {
         "missing_output": "尚未填写",
         "no_quantization": "不量化",
         "quantization": "{bit}-bit QLoRA",
+        "xpu_acceleration": "Intel XPU 兼容模式",
         "title": "配置摘要",
         "subtitle": "请确认后再启动训练",
         "labels": ("模型", "微调方案", "训练任务", "学习设置", "批处理", "序列与精度", "输出目录"),
@@ -3397,6 +3397,7 @@ WIZARD_SUMMARY_LOCALES = {
         "missing_output": "입력하지 않음",
         "no_quantization": "양자화 없음",
         "quantization": "{bit}-bit QLoRA",
+        "xpu_acceleration": "Intel XPU 호환 모드",
         "title": "설정 요약",
         "subtitle": "학습을 시작하기 전에 설정을 확인하세요",
         "labels": ("모델", "파인튜닝", "학습 작업", "학습 설정", "배치", "시퀀스 및 정밀도", "출력"),
@@ -3419,6 +3420,7 @@ WIZARD_SUMMARY_LOCALES = {
         "missing_output": "未入力",
         "no_quantization": "量子化なし",
         "quantization": "{bit}-bit QLoRA",
+        "xpu_acceleration": "Intel XPU 互換モード",
         "title": "設定の概要",
         "subtitle": "学習を開始する前に設定を確認してください",
         "labels": ("モデル", "ファインチューニング", "学習タスク", "学習設定", "バッチ", "系列と精度", "出力先"),
@@ -3799,14 +3801,24 @@ WIZARD_MEMORY_LOCALES = {
         "labels": (
             "Local weight files",
             "Model parameters",
+            "Trainable parameters",
+            "Loaded model weights",
+            "Gradients and optimizer",
+            "Peak activations",
+            "Runtime and allocator",
             "Estimated peak",
             "Recommended with 10% margin",
             "Free / total VRAM",
             "Devices",
-            "Estimate basis",
+            "Peak path",
+            "Parameter basis",
         ),
-        "local_source": "Local weights + model config + training config",
-        "unavailable_source": "Local model inspection unavailable",
+        "peak_kinds": {"training": "Training step", "validation": "Validation step"},
+        "sources": {
+            "safetensors_metadata": "Exact safetensors metadata + model/training config",
+            "config_architecture": "Model architecture + quantized weights + training config",
+            "weight_size": "Weight file size + model/training config",
+        },
         "model_read_error": "The local model directory could not be inspected. Verify config.json and the weight files before training.",
         "unknown": "Not detected",
         "risk_title": "Force training despite the VRAM warning?",
@@ -3836,14 +3848,24 @@ WIZARD_MEMORY_LOCALES = {
         "labels": (
             "Локальные файлы весов",
             "Параметры модели",
+            "Обучаемые параметры",
+            "Загруженные веса моделей",
+            "Градиенты и оптимизатор",
+            "Пиковые активации",
+            "Среда и распределитель памяти",
             "Оценочный пик",
             "Рекомендация с запасом 10%",
             "Свободно / всего",
             "Устройства",
-            "Основа оценки",
+            "Источник пика",
+            "Основа параметров",
         ),
-        "local_source": "Локальные веса, конфигурация модели и обучения",
-        "unavailable_source": "Локальная модель не проверена",
+        "peak_kinds": {"training": "Шаг обучения", "validation": "Шаг проверки"},
+        "sources": {
+            "safetensors_metadata": "Точные метаданные safetensors + конфигурация модели и обучения",
+            "config_architecture": "Архитектура модели + квантованные веса + конфигурация обучения",
+            "weight_size": "Размер файлов весов + конфигурация модели и обучения",
+        },
         "model_read_error": "Не удалось проверить локальный каталог модели. Перед обучением проверьте config.json и файлы весов.",
         "unknown": "Не обнаружено",
         "risk_title": "Запустить обучение вопреки предупреждению?",
@@ -3873,14 +3895,24 @@ WIZARD_MEMORY_LOCALES = {
         "labels": (
             "本地权重文件",
             "模型参数量",
+            "可训练参数量",
+            "已加载模型权重",
+            "梯度与优化器状态",
+            "峰值激活值",
+            "运行时与显存分配器",
             "预计峰值",
             "包含 10% 余量的建议值",
             "空闲 / 总显存",
             "设备数量",
-            "估算依据",
+            "峰值来源",
+            "参数量依据",
         ),
-        "local_source": "本地权重 + 模型配置 + 训练配置",
-        "unavailable_source": "无法检查本地模型",
+        "peak_kinds": {"training": "训练步骤", "validation": "验证步骤"},
+        "sources": {
+            "safetensors_metadata": "精确 safetensors 张量元数据 + 模型和训练配置",
+            "config_architecture": "模型结构 + 量化权重 + 训练配置",
+            "weight_size": "权重文件大小 + 模型和训练配置",
+        },
         "model_read_error": "无法检查本地模型目录。训练前请确认 config.json 和权重文件完整可读。",
         "unknown": "未检测到",
         "risk_title": "确定忽略显存警告并强制训练吗？",
@@ -3910,14 +3942,24 @@ WIZARD_MEMORY_LOCALES = {
         "labels": (
             "로컬 가중치 파일",
             "모델 파라미터",
+            "학습 가능 파라미터",
+            "로드된 모델 가중치",
+            "그래디언트 및 옵티마이저",
+            "최대 활성값",
+            "런타임 및 메모리 할당기",
             "예상 최대치",
             "10% 여유 포함 권장값",
             "여유 / 전체 메모리",
             "장치",
-            "추정 기준",
+            "최대치 경로",
+            "파라미터 기준",
         ),
-        "local_source": "로컬 가중치 + 모델 구성 + 학습 구성",
-        "unavailable_source": "로컬 모델 검사 불가",
+        "peak_kinds": {"training": "학습 단계", "validation": "검증 단계"},
+        "sources": {
+            "safetensors_metadata": "정확한 safetensors 메타데이터 + 모델/학습 구성",
+            "config_architecture": "모델 구조 + 양자화 가중치 + 학습 구성",
+            "weight_size": "가중치 파일 크기 + 모델/학습 구성",
+        },
         "model_read_error": "로컬 모델 디렉터리를 검사할 수 없습니다. 학습 전에 config.json과 가중치 파일을 확인하세요.",
         "unknown": "감지되지 않음",
         "risk_title": "GPU 메모리 경고를 무시하고 강제 학습할까요?",
@@ -3947,14 +3989,24 @@ WIZARD_MEMORY_LOCALES = {
         "labels": (
             "ローカル重みファイル",
             "モデルパラメータ",
+            "学習対象パラメータ",
+            "読み込み済みモデル重み",
+            "勾配とオプティマイザー",
+            "ピーク活性値",
+            "ランタイムとメモリアロケーター",
             "推定ピーク",
             "10%余裕込み推奨値",
             "空き / 総メモリ",
             "デバイス",
-            "推定根拠",
+            "ピーク経路",
+            "パラメータ根拠",
         ),
-        "local_source": "ローカル重み + モデル構成 + 学習構成",
-        "unavailable_source": "ローカルモデルを検査できません",
+        "peak_kinds": {"training": "学習ステップ", "validation": "検証ステップ"},
+        "sources": {
+            "safetensors_metadata": "正確な safetensors メタデータ + モデル/学習設定",
+            "config_architecture": "モデル構造 + 量子化重み + 学習設定",
+            "weight_size": "重みファイルサイズ + モデル/学習設定",
+        },
         "model_read_error": "ローカルモデルディレクトリを検査できません。学習前に config.json と重みファイルを確認してください。",
         "unknown": "未検出",
         "risk_title": "GPU メモリ警告を無視して強制学習しますか？",
@@ -4200,6 +4252,13 @@ ALERTS = {
         "ko": "실패했습니다.",
         "ja": "失敗しました。",
     },
+    "err_launch": {
+        "en": "The training process could not be started. The full error is shown below and saved to {log_path}.",
+        "ru": "Не удалось запустить процесс обучения. Полная ошибка приведена ниже и сохранена в {log_path}.",
+        "zh": "无法启动训练进程。完整错误已显示在下方，并保存到 {log_path}。",
+        "ko": "학습 프로세스를 시작할 수 없습니다. 전체 오류는 아래에 표시되며 {log_path}에 저장됩니다.",
+        "ja": "トレーニングプロセスを開始できませんでした。完全なエラーは以下に表示され、{log_path} に保存されます。",
+    },
     "err_demo": {
         "en": "Training is unavailable in demo mode, duplicate the space to a private one first.",
         "ru": "Обучение недоступно в демонстрационном режиме, сначала скопируйте пространство в частное.",
@@ -4235,6 +4294,13 @@ ALERTS = {
         "ko": "CUDA 환경이 감지되지 않았습니다.",
         "ja": "CUDA 環境が検出されませんでした。",
     },
+    "info_xpu_compat": {
+        "en": "Intel XPU detected. Liger Kernel is enabled only after compatibility checks; FlashAttention is disabled in this XPU training path.",
+        "ru": "Обнаружен Intel XPU. Liger Kernel включается после проверки совместимости; FlashAttention отключён в этом режиме XPU.",
+        "zh": "已检测到 Intel XPU。Liger Kernel 仅在通过兼容性检查后启用；当前 XPU 训练路径关闭 FlashAttention。",
+        "ko": "Intel XPU가 감지되었습니다. Liger Kernel은 호환성 확인 후 활성화되며 현재 XPU 학습 경로에서는 FlashAttention을 끕니다.",
+        "ja": "Intel XPU を検出しました。Liger Kernel は互換性確認後に有効化し、この XPU 学習経路では FlashAttention を無効にします。",
+    },
     "warn_output_dir_exists": {
         "en": "Output dir already exists, will resume training from here.",
         "ru": "Выходной каталог уже существует, обучение будет продолжено отсюда.",
@@ -4269,6 +4335,20 @@ ALERTS = {
         "zh": "训练完毕。",
         "ko": "완료되었습니다.",
         "ja": "トレーニングが完了しました。",
+    },
+    "info_tensorboard_started": {
+        "en": "TensorBoard started for this training run: {url}",
+        "ru": "TensorBoard запущен для этой задачи обучения: {url}",
+        "zh": "已为本次训练启动 TensorBoard：{url}",
+        "ko": "이 학습 작업을 위한 TensorBoard가 시작되었습니다: {url}",
+        "ja": "このトレーニング用の TensorBoard を起動しました: {url}",
+    },
+    "info_tensorboard_link": {
+        "en": "### TensorBoard\n[Open monitoring panel]({url})\n\nLog directory: `{log_dir}`",
+        "ru": "### TensorBoard\n[Открыть панель мониторинга]({url})\n\nКаталог журналов: `{log_dir}`",
+        "zh": "### TensorBoard\n[打开监控面板]({url})\n\n日志目录：`{log_dir}`",
+        "ko": "### TensorBoard\n[모니터링 패널 열기]({url})\n\n로그 디렉터리: `{log_dir}`",
+        "ja": "### TensorBoard\n[監視パネルを開く]({url})\n\nログディレクトリ: `{log_dir}`",
     },
     "info_config_saved": {
         "en": "Arguments have been saved at: ",
@@ -4348,3 +4428,18 @@ ALERTS = {
         "ja": "### SwanLab リンク\n",
     },
 }
+
+
+# Feature resource modules keep language text separate from UI and training logic.
+LOCALES.update(PREVIEW_LOCALES)
+LOCALES.update(STAGE_LOCALES)
+LOCALES.update(CHAT_LOCALES)
+for _field, _translations in FIELD_HELP.items():
+    for _lang, _info in _translations.items():
+        LOCALES.setdefault(_field, {}).setdefault(_lang, {})["info"] = _info
+
+for _lang, _methods in FINETUNING_LABELS.items():
+    LOCALES["finetuning_type"][_lang]["choices"] = [(label, method) for method, label in _methods.items()]
+    LOCALES["quantization_bit"][_lang]["choices"] = QUANTIZATION_LABELS[_lang]
+    WIZARD_GUIDANCE_LOCALES[_lang]["goal_choices"] = STAGE_GOAL_CHOICES[_lang]
+    LOCALES["wizard_goal"][_lang]["choices"] = STAGE_GOAL_CHOICES[_lang]

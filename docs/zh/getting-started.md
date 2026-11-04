@@ -112,15 +112,7 @@ llamafactory-cli webui
 
 ### 推理部署
 
-训练完成后，您可以使用以下命令部署模型：
-
-```bash
-# 使用 vLLM 后端进行高性能推理
-llamafactory-cli chat --model_name_or_path path/to/your/model --template qwen --infer_backend vllm
-
-# 使用 HuggingFace 后端进行推理
-llamafactory-cli chat --model_name_or_path path/to/your/model --template qwen
-```
+训练完成后，在 WebUI 的“快速测试”页面选择本地模型目录并加载，即可使用 Hugging Face Transformers 进行对话测试。本项目不再提供其他推理后端。
 
 ## 进阶用法
 

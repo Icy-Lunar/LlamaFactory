@@ -16,6 +16,7 @@ import inspect
 from typing import TYPE_CHECKING
 
 from ...extras import logging
+from ...extras.liger import get_model_liger_status
 from ...extras.misc import get_device_name
 
 
@@ -38,6 +39,13 @@ def apply_liger_kernel(
         return
 
     model_type = getattr(config, "model_type", None)
+    dtype = str(model_args.compute_dtype).removeprefix("torch.") if model_args.compute_dtype else "float32"
+    status = get_model_liger_status(model_type, dtype)
+    if not status.enabled:
+        model_args.enable_liger_kernel = False
+        logger.warning_rank0(f"Liger Kernel disabled ({status.reason}): {status.detail}")
+        return
+
     if model_type == "gemma":
         from liger_kernel.transformers import apply_liger_kernel_to_gemma as apply_liger_kernel
     elif model_type == "gemma2":

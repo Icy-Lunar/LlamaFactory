@@ -18,9 +18,10 @@ import platform
 from ..extras.misc import fix_proxy, is_env_enabled
 from ..extras.packages import is_gradio_available
 from .common import save_config
-from .components import create_export_tab, create_footer, create_train_tab
+from .components import create_chat_tab, create_export_tab, create_footer, create_train_tab
 from .css import CSS
 from .engine import Engine
+from .help import HELP_JS
 from .locales import LOCALES
 
 
@@ -28,18 +29,23 @@ if is_gradio_available():
     import gradio as gr
 
 
-def _switch_workspace(lang: str, show_merge: bool):
+def _switch_workspace(lang: str, workspace: str):
     return (
         gr.Button(
             value=LOCALES["train_workspace_btn"][lang]["value"],
-            variant="secondary" if show_merge else "primary",
+            variant="primary" if workspace == "train" else "secondary",
+        ),
+        gr.Button(
+            value=LOCALES["chat_workspace_btn"][lang]["value"],
+            variant="primary" if workspace == "chat" else "secondary",
         ),
         gr.Button(
             value=LOCALES["merge_workspace_btn"][lang]["value"],
-            variant="primary" if show_merge else "secondary",
+            variant="primary" if workspace == "merge" else "secondary",
         ),
-        gr.Column(visible=not show_merge),
-        gr.Column(visible=show_merge),
+        gr.Column(visible=workspace == "train"),
+        gr.Column(visible=workspace == "chat"),
+        gr.Column(visible=workspace == "merge"),
     )
 
 
@@ -66,7 +72,7 @@ def create_ui(demo_mode: bool = False) -> "gr.Blocks":
         input_border_color="#cbd6e5",
         input_border_color_dark="#3a4c65",
     )
-    with gr.Blocks(title=f"Cyrene Yield Training ({hostname})", theme=theme, css=CSS) as demo:
+    with gr.Blocks(title=f"Cyrene Yield ({hostname})", theme=theme, css=CSS, js=HELP_JS) as demo:
         with gr.Row(elem_classes="product-header"):
             with gr.Column(scale=3, min_width=280):
                 title = gr.HTML(elem_classes="product-title", padding=False)
@@ -75,6 +81,7 @@ def create_ui(demo_mode: bool = False) -> "gr.Blocks":
             with gr.Row(elem_classes="enterprise-workspace-nav"):
                 train_workspace_btn = gr.Button(LOCALES["train_workspace_btn"]["en"]["value"], variant="primary")
                 if not demo_mode:
+                    chat_workspace_btn = gr.Button(LOCALES["chat_workspace_btn"]["en"]["value"])
                     merge_workspace_btn = gr.Button(LOCALES["merge_workspace_btn"]["en"]["value"])
             lang = gr.Dropdown(
                 choices=["en", "ru", "zh", "ko", "ja"],
@@ -94,9 +101,13 @@ def create_ui(demo_mode: bool = False) -> "gr.Blocks":
 
         workspace_elems = {"train_workspace_btn": train_workspace_btn}
         if not demo_mode:
+            with gr.Column(visible=False, elem_classes="enterprise-workspace-panel") as chat_workspace:
+                engine.manager.add_elems("chat", create_chat_tab(engine))
+
             with gr.Column(visible=False, elem_classes="enterprise-workspace-panel") as merge_workspace:
                 engine.manager.add_elems("export", create_export_tab(engine))
 
+            workspace_elems["chat_workspace_btn"] = chat_workspace_btn
             workspace_elems["merge_workspace_btn"] = merge_workspace_btn
 
         engine.manager.add_elems("workspace", workspace_elems)
@@ -105,18 +116,31 @@ def create_ui(demo_mode: bool = False) -> "gr.Blocks":
         if not demo_mode:
             workspace_outputs = [
                 train_workspace_btn,
+                chat_workspace_btn,
                 merge_workspace_btn,
                 train_workspace,
+                chat_workspace,
                 merge_workspace,
             ]
             train_workspace_btn.click(
-                lambda current_lang: _switch_workspace(current_lang, False),
+                lambda current_lang: _switch_workspace(current_lang, "train"),
                 [lang],
                 workspace_outputs,
                 queue=False,
             )
+            chat_workspace_btn.click(
+                lambda current_lang: _switch_workspace(current_lang, "chat"),
+                [lang],
+                workspace_outputs,
+                queue=False,
+            ).then(
+                lambda model_path: model_path,
+                [engine.manager.get_elem_by_id("top.model_path")],
+                [engine.manager.get_elem_by_id("chat.chat_model_path")],
+                queue=False,
+            )
             merge_workspace_btn.click(
-                lambda current_lang: _switch_workspace(current_lang, True),
+                lambda current_lang: _switch_workspace(current_lang, "merge"),
                 [lang],
                 workspace_outputs,
                 queue=False,

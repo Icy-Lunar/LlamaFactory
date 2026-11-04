@@ -29,7 +29,6 @@ from ..extras.constants import (
 )
 from ..extras.packages import is_gradio_available, is_matplotlib_available
 from ..extras.ploting import gen_loss_plot
-from ..model import QuantizationMethod
 from .common import DEFAULT_CONFIG_DIR, DEFAULT_DATA_DIR, get_save_dir, get_template, load_dataset_info
 from .locales import ALERTS
 
@@ -58,18 +57,12 @@ def can_quantize_to(
     Inputs: top.quantization_method, top.quantization_bit, top.finetuning_type
     Outputs: top.quantization_bit
     """
-    if quantization_method == QuantizationMethod.BNB:
-        available_bits = ["none", "8", "4"]
-    elif quantization_method == QuantizationMethod.HQQ:
-        available_bits = ["none", "8", "6", "5", "4", "3", "2", "1"]
-    elif quantization_method == QuantizationMethod.EETQ:
-        available_bits = ["none", "8"]
-    else:
-        available_bits = ["none"]
+    # The guided product has one quantization backend, including restored configurations.
+    available_bits = ["none", "8", "4"]
 
     interactive = finetuning_type in PEFT_METHODS
     selected_bit = quantization_bit if interactive and quantization_bit in available_bits else "none"
-    return gr.Dropdown(choices=available_bits, value=selected_bit, interactive=interactive)
+    return gr.Dropdown(value=selected_bit, interactive=interactive)
 
 
 def change_stage(training_stage: str = list(TRAINING_STAGES.keys())[0]) -> tuple[list[str], bool]:

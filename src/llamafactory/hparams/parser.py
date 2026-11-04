@@ -33,7 +33,8 @@ from transformers.training_args import ParallelMode
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_npu_available
 
 from ..extras import logging
-from ..extras.constants import CHECKPOINT_NAMES, EngineName
+from ..extras.constants import CHECKPOINT_NAMES
+from ..extras.liger import get_liger_status
 from ..extras.misc import check_dependencies, check_version, get_current_device, is_env_enabled
 from ..extras.packages import is_mcore_adapter_available, is_megatron_bridge_available
 from .data_args import DataArguments
@@ -193,8 +194,6 @@ def _set_env_vars() -> None:
     if is_torch_npu_available():
         # avoid JIT compile on NPU devices, see https://zhuanlan.zhihu.com/p/660875458
         torch.npu.set_compile_mode(jit_compile=is_env_enabled("NPU_JIT_COMPILE"))
-        # avoid use fork method on NPU devices, see https://github.com/hiyouga/LLaMA-Factory/issues/7447
-        os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
 
 def _verify_model_args(
@@ -236,17 +235,19 @@ def _check_extra_dependencies(
         check_version("unsloth", mandatory=True)
 
     if model_args.enable_liger_kernel:
-        check_version("liger-kernel", mandatory=True)
+        dtype = "float32"
+        if training_args is not None:
+            if training_args.bf16 or finetuning_args.pure_bf16:
+                dtype = "bfloat16"
+            elif training_args.fp16:
+                dtype = "float16"
+        status = get_liger_status(dtype)
+        if not status.enabled:
+            logger.warning_rank0(f"Liger Kernel disabled ({status.reason}): {status.detail}")
+            model_args.enable_liger_kernel = False
 
     if model_args.mixture_of_depths is not None:
         check_version("mixture-of-depth>=1.1.6", mandatory=True)
-
-    if model_args.infer_backend == EngineName.VLLM:
-        check_version("vllm>=0.4.3,<=0.11.0")
-        check_version("vllm", mandatory=True)
-    elif model_args.infer_backend == EngineName.SGLANG:
-        check_version("sglang>=0.4.5")
-        check_version("sglang", mandatory=True)
 
     if finetuning_args.use_galore:
         check_version("galore_torch", mandatory=True)
@@ -493,9 +494,6 @@ def get_train_args(args: dict[str, Any] | list[str] | None = None) -> _TRAIN_CLS
     ):
         raise ValueError("FP8 training is not compatible with quantization. Please disable one of them.")
 
-    if model_args.infer_backend != EngineName.HF:
-        raise ValueError("vLLM/SGLang backend is only available for API, CLI and Web.")
-
     if model_args.use_unsloth and is_deepspeed_zero3_enabled():
         raise ValueError("Unsloth is incompatible with DeepSpeed ZeRO-3.")
 
@@ -635,20 +633,6 @@ def get_infer_args(args: dict[str, Any] | list[str] | None = None) -> _INFER_CLS
     # Setup logging
     _set_transformers_logging()
 
-    # Check arguments
-    if model_args.infer_backend == "vllm":
-        if finetuning_args.stage != "sft":
-            raise ValueError("vLLM engine only supports auto-regressive models.")
-
-        if model_args.quantization_bit is not None:
-            raise ValueError("vLLM engine does not support bnb quantization (GPTQ and AWQ are supported).")
-
-        if model_args.rope_scaling is not None:
-            raise ValueError("vLLM engine does not support RoPE scaling.")
-
-        if model_args.adapter_name_or_path is not None and len(model_args.adapter_name_or_path) != 1:
-            raise ValueError("vLLM only accepts a single adapter. Merge them first.")
-
     _set_env_vars()
     _verify_model_args(model_args, data_args, finetuning_args)
     _check_extra_dependencies(model_args, finetuning_args)
@@ -669,10 +653,6 @@ def get_eval_args(args: dict[str, Any] | list[str] | None = None) -> _EVAL_CLS:
 
     # Setup logging
     _set_transformers_logging()
-
-    # Check arguments
-    if model_args.infer_backend != EngineName.HF:
-        raise ValueError("vLLM/SGLang backend is only available for API, CLI and Web.")
 
     _set_env_vars()
     _verify_model_args(model_args, data_args, finetuning_args)

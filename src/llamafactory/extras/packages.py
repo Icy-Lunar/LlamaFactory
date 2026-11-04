@@ -110,10 +110,6 @@ def is_safetensors_available():
     return _is_package_available("safetensors")
 
 
-def is_sglang_available():
-    return _is_package_available("sglang")
-
-
 def is_starlette_available():
     return _is_package_available("sse_starlette")
 
@@ -130,10 +126,6 @@ def is_torch_version_greater_than(content: str):
 
 def is_uvicorn_available():
     return _is_package_available("uvicorn")
-
-
-def is_vllm_available():
-    return _is_package_available("vllm")
 
 
 _orig_is_package_available = import_utils._is_package_available

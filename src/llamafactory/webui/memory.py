@@ -17,6 +17,7 @@
 import json
 import re
 from dataclasses import dataclass
+from math import prod
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,16 @@ class ModelShape:
     is_multimodal: bool = False
     vision_hidden_size: int = 0
     vision_num_hidden_layers: int = 0
+    vision_intermediate_size: int = 0
+    vision_patch_size: int = 14
+    vision_spatial_merge_size: int = 1
+    num_local_experts: int = 1
+    num_experts_per_tok: int = 1
+    shared_expert_intermediate_size: int = 0
+    text_parameter_count: int = 0
+    vision_parameter_count: int = 0
+    projector_parameter_count: int = 0
+    parameter_source: str = "file_size"
 
 
 @dataclass(frozen=True)
@@ -61,6 +72,10 @@ class MemoryEstimate:
     workspace_gib: float
     per_device: bool
     weight_size_gib: float
+    model_gib: float
+    trainable_state_gib: float
+    trainable_parameter_count: int
+    peak_kind: str
 
 
 @dataclass(frozen=True)
@@ -174,6 +189,60 @@ def _scan_weight_files(model_dir: Path) -> list[Path]:
     raise ValueError("No supported model weight files were found in the local model directory.")
 
 
+def _read_safetensors_metadata(weight_files: list[Path]) -> tuple[int, int] | None:
+    """Read tensor counts from safetensors headers without allocating model weights."""
+    if not weight_files or any(weight_file.suffix.lower() != ".safetensors" for weight_file in weight_files):
+        return None
+
+    parameter_count = 0
+    tensor_bytes = 0
+    try:
+        for weight_file in weight_files:
+            file_size = weight_file.stat().st_size
+            with open(weight_file, "rb") as safetensors_file:
+                header_length_bytes = safetensors_file.read(8)
+                if len(header_length_bytes) != 8:
+                    return None
+
+                header_length = int.from_bytes(header_length_bytes, byteorder="little", signed=False)
+                if header_length <= 0 or header_length > min(file_size - 8, 256 * 1024 * 1024):
+                    return None
+
+                header = json.loads(safetensors_file.read(header_length).decode("utf-8"))
+                data_size = file_size - 8 - header_length
+
+            if not isinstance(header, dict):
+                return None
+
+            for tensor_name, tensor_info in header.items():
+                if tensor_name == "__metadata__":
+                    continue
+                if not isinstance(tensor_info, dict):
+                    return None
+
+                shape = tensor_info.get("shape")
+                offsets = tensor_info.get("data_offsets")
+                if (
+                    not isinstance(shape, list)
+                    or not all(isinstance(dimension, int) and dimension >= 0 for dimension in shape)
+                    or not isinstance(offsets, list)
+                    or len(offsets) != 2
+                    or not all(isinstance(offset, int) and offset >= 0 for offset in offsets)
+                    or offsets[1] < offsets[0]
+                    or offsets[1] > data_size
+                ):
+                    return None
+
+                parameter_count += prod(shape)
+                tensor_bytes += offsets[1] - offsets[0]
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+    if parameter_count <= 0 or tensor_bytes <= 0:
+        return None
+    return parameter_count, tensor_bytes
+
+
 def get_local_weight_size(model_path: str) -> tuple[int, int]:
     model_dir = resolve_local_model_dir(model_path)
     weight_files = _scan_weight_files(model_dir)
@@ -205,9 +274,9 @@ def _weight_bytes_per_parameter(config: dict[str, Any], text_config: dict[str, A
     return 2.0
 
 
-def _estimate_parameter_count(config: dict[str, Any], text_config: dict[str, Any]) -> int:
+def _estimate_text_parameter_count(text_config: dict[str, Any]) -> int:
     for key in ("num_parameters", "n_params", "parameter_count", "model_size"):
-        direct_count = _parse_parameter_count(config.get(key)) or _parse_parameter_count(text_config.get(key))
+        direct_count = _parse_parameter_count(text_config.get(key))
         if direct_count is not None:
             return direct_count
 
@@ -231,18 +300,32 @@ def _estimate_parameter_count(config: dict[str, Any], text_config: dict[str, Any
     if shared_expert_size:
         mlp_params += 3 * hidden_size * shared_expert_size
 
-    tied_embeddings = bool(text_config.get("tie_word_embeddings", config.get("tie_word_embeddings", False)))
+    tied_embeddings = bool(text_config.get("tie_word_embeddings", False))
     embedding_params = vocab_size * hidden_size * (1 if tied_embeddings else 2)
-    parameter_count = num_layers * (attention_params + mlp_params) + embedding_params
+    return int(num_layers * (attention_params + mlp_params) + embedding_params)
+
+
+def _estimate_vision_parameter_count(vision_config: dict[str, Any]) -> int:
+    if not vision_config:
+        return 0
+
+    vision_hidden = _positive_int(vision_config.get("hidden_size"), 1024)
+    vision_layers = _positive_int(vision_config.get("num_hidden_layers"), 24)
+    vision_intermediate = _positive_int(vision_config.get("intermediate_size"), 4 * vision_hidden)
+    return int(vision_layers * (4 * vision_hidden * vision_hidden + 2 * vision_hidden * vision_intermediate))
+
+
+def _estimate_parameter_count(config: dict[str, Any], text_config: dict[str, Any]) -> int:
+    for key in ("num_parameters", "n_params", "parameter_count", "model_size"):
+        direct_count = _parse_parameter_count(config.get(key)) or _parse_parameter_count(text_config.get(key))
+        if direct_count is not None:
+            return direct_count
+
+    parameter_count = _estimate_text_parameter_count(text_config)
 
     vision_config = config.get("vision_config")
     if isinstance(vision_config, dict):
-        vision_hidden = _positive_int(vision_config.get("hidden_size"), 1024)
-        vision_layers = _positive_int(vision_config.get("num_hidden_layers"), 24)
-        vision_intermediate = _positive_int(vision_config.get("intermediate_size"), 4 * vision_hidden)
-        parameter_count += vision_layers * (
-            4 * vision_hidden * vision_hidden + 2 * vision_hidden * vision_intermediate
-        )
+        parameter_count += _estimate_vision_parameter_count(vision_config)
 
     return int(parameter_count)
 
@@ -277,7 +360,9 @@ def read_model_shape(model_path: str) -> ModelShape:
     if weight_size_bytes <= 0:
         raise ValueError("The local model weight files are empty.")
 
-    text_config = config.get("text_config") if isinstance(config.get("text_config"), dict) else config
+    text_config = dict(config.get("text_config")) if isinstance(config.get("text_config"), dict) else config
+    if text_config is not config:
+        text_config.setdefault("tie_word_embeddings", config.get("tie_word_embeddings", False))
     hidden_size = _positive_int(text_config.get("hidden_size", text_config.get("n_embd")), 4096)
     num_layers = _positive_int(text_config.get("num_hidden_layers", text_config.get("n_layer")), 32)
     vocab_size = _positive_int(text_config.get("vocab_size"), 32000)
@@ -288,8 +373,49 @@ def read_model_shape(model_path: str) -> ModelShape:
     )
     vision_config = config.get("vision_config") if isinstance(config.get("vision_config"), dict) else {}
     is_multimodal = _is_multimodal_config(config)
-    bytes_per_parameter = _weight_bytes_per_parameter(config, text_config)
-    parameter_count = max(1, round(weight_size_bytes / bytes_per_parameter))
+    configured_bytes_per_parameter = _weight_bytes_per_parameter(config, text_config)
+    tensor_metadata = _read_safetensors_metadata(weight_files)
+    architecture_parameter_count = _estimate_parameter_count(config, text_config)
+    quantization_config = config.get("quantization_config")
+    has_quantized_storage = isinstance(quantization_config, dict) and any(
+        quantization_config.get(key) not in (None, False, "")
+        for key in ("quant_method", "bits", "load_in_4bit", "load_in_8bit")
+    )
+    if tensor_metadata is not None and not has_quantized_storage:
+        parameter_count, tensor_bytes = tensor_metadata
+        bytes_per_parameter = tensor_bytes / parameter_count
+        parameter_source = "safetensors_metadata"
+    elif has_quantized_storage:
+        parameter_count = architecture_parameter_count
+        bytes_per_parameter = weight_size_bytes / max(1, parameter_count)
+        parameter_source = "config_architecture"
+    else:
+        parameter_count = max(1, round(weight_size_bytes / configured_bytes_per_parameter))
+        bytes_per_parameter = configured_bytes_per_parameter
+        parameter_source = "weight_size"
+
+    text_parameter_estimate = _estimate_text_parameter_count(text_config)
+    if is_multimodal:
+        resolved_vision_config = vision_config or {
+            "hidden_size": 1024,
+            "num_hidden_layers": 24,
+            "intermediate_size": 4096,
+        }
+        vision_parameter_estimate = _estimate_vision_parameter_count(resolved_vision_config)
+        vision_hidden_size = _positive_int(resolved_vision_config.get("hidden_size"), 1024)
+        projector_parameter_estimate = vision_hidden_size * hidden_size + hidden_size * hidden_size
+    else:
+        vision_parameter_estimate = 0
+        projector_parameter_estimate = 0
+
+    component_total = max(
+        1,
+        text_parameter_estimate + vision_parameter_estimate + projector_parameter_estimate,
+    )
+    component_scale = parameter_count / component_total
+    text_parameter_count = int(text_parameter_estimate * component_scale)
+    vision_parameter_count = int(vision_parameter_estimate * component_scale)
+    projector_parameter_count = max(0, parameter_count - text_parameter_count - vision_parameter_count)
     return ModelShape(
         parameter_count=parameter_count,
         hidden_size=hidden_size,
@@ -305,6 +431,27 @@ def read_model_shape(model_path: str) -> ModelShape:
         is_multimodal=is_multimodal,
         vision_hidden_size=_positive_int(vision_config.get("hidden_size"), 1024) if is_multimodal else 0,
         vision_num_hidden_layers=(_positive_int(vision_config.get("num_hidden_layers"), 24) if is_multimodal else 0),
+        vision_intermediate_size=(
+            _positive_int(vision_config.get("intermediate_size"), 4 * 1024) if is_multimodal else 0
+        ),
+        vision_patch_size=_positive_int(vision_config.get("patch_size"), 14) if is_multimodal else 14,
+        vision_spatial_merge_size=(_positive_int(vision_config.get("spatial_merge_size"), 1) if is_multimodal else 1),
+        num_local_experts=_positive_int(
+            text_config.get("num_local_experts", text_config.get("num_experts", text_config.get("n_routed_experts"))),
+            1,
+        ),
+        num_experts_per_tok=_positive_int(
+            text_config.get("num_experts_per_tok", text_config.get("num_experts_per_token")),
+            1,
+        ),
+        shared_expert_intermediate_size=_positive_int(
+            text_config.get("shared_expert_intermediate_size"),
+            0,
+        ),
+        text_parameter_count=text_parameter_count,
+        vision_parameter_count=vision_parameter_count,
+        projector_parameter_count=projector_parameter_count,
+        parameter_source=parameter_source,
     )
 
 
@@ -312,8 +459,102 @@ def _estimate_lora_parameters(shape: ModelShape, rank: int) -> int:
     head_dim = max(1, shape.hidden_size // shape.num_attention_heads)
     kv_size = shape.num_key_value_heads * head_dim
     attention = rank * (6 * shape.hidden_size + 2 * kv_size)  # q/o use 2h each; k/v use h + kv_size each
-    mlp = 3 * rank * (shape.hidden_size + shape.intermediate_size)
+    mlp = 3 * rank * (shape.hidden_size + shape.intermediate_size) * max(1, shape.num_local_experts)
+    if shape.shared_expert_intermediate_size:
+        mlp += 3 * rank * (shape.hidden_size + shape.shared_expert_intermediate_size)
     return shape.num_hidden_layers * (attention + mlp)
+
+
+def _optimizer_state_bytes(optimizer: str) -> float:
+    normalized = (optimizer or "adamw_torch").lower()
+    if "8bit" in normalized:
+        return 2.5
+    if "adafactor" in normalized:
+        return 4.0
+    if any(name in normalized for name in ("sgd", "rmsprop")):
+        return 4.0
+    return 8.0
+
+
+def _estimate_text_activation_bytes(
+    shape: ModelShape,
+    *,
+    batch_size: int,
+    cutoff_len: int,
+    dtype_bytes: int,
+    stage: str,
+    gradient_checkpointing: bool,
+    fused_loss: bool,
+    training: bool,
+) -> float:
+    batch = max(1, batch_size)
+    sequence = max(1, cutoff_len)
+    stage_multiplier = 2.0 if stage in {"dpo", "kto", "ppo"} else 1.0
+    tokens = batch * sequence * stage_multiplier
+    head_dim = max(1, shape.hidden_size // max(1, shape.num_attention_heads))
+    kv_size = max(1, shape.num_key_value_heads) * head_dim
+    active_intermediate = shape.intermediate_size * max(1, shape.num_experts_per_tok)
+
+    # Only one transformer layer's temporary tensors are live at a time. SDPA/FlashAttention
+    # uses tiled attention; reserve a 256-token tile rather than a quadratic full score matrix.
+    transient_elements = tokens * (4 * shape.hidden_size + 3 * active_intermediate + 2 * kv_size)
+    attention_workspace_elements = (
+        batch * stage_multiplier * max(1, shape.num_attention_heads) * sequence * min(sequence, 256)
+    )
+    transient_bytes = (transient_elements + attention_workspace_elements) * dtype_bytes
+
+    if training and gradient_checkpointing:
+        saved_bytes = tokens * shape.hidden_size * shape.num_hidden_layers * dtype_bytes * 2.0
+    elif training:
+        saved_elements = (
+            tokens * (6 * shape.hidden_size + 3 * active_intermediate + 2 * kv_size) * shape.num_hidden_layers
+        )
+        saved_bytes = saved_elements * dtype_bytes
+    else:
+        saved_bytes = 0.0
+
+    # Standard causal-LM loss materializes full logits, usually in fp32. Liger's fused linear
+    # cross entropy works in chunks and therefore keeps only a fraction of that peak live.
+    logits_factor = 0.12 if fused_loss else 1.0
+    logits_bytes = tokens * shape.vocab_size * 4 * logits_factor
+    return saved_bytes + transient_bytes + logits_bytes
+
+
+def _estimate_vision_activation_bytes(
+    shape: ModelShape,
+    *,
+    batch_size: int,
+    dtype_bytes: int,
+    stage: str,
+    gradient_checkpointing: bool,
+    freeze_vision_tower: bool,
+    freeze_multi_modal_projector: bool,
+    image_max_pixels: int,
+    video_max_pixels: int,
+) -> float:
+    patch_area = max(1, shape.vision_patch_size**2 * shape.vision_spatial_merge_size**2)
+    image_tokens = max(1, image_max_pixels) / patch_area
+    # The UI currently has no frame-count control. Eight sampled frames is a conservative
+    # default for the per-frame video pixel limit used by the data processor.
+    video_tokens = 8 * max(1, video_max_pixels) / patch_area
+    stage_multiplier = 2.0 if stage in {"dpo", "kto", "ppo"} else 1.0
+    tokens = max(1, batch_size) * stage_multiplier * (image_tokens + video_tokens)
+    hidden = shape.vision_hidden_size or 1024
+    intermediate = shape.vision_intermediate_size or 4 * hidden
+    layers = shape.vision_num_hidden_layers or 24
+    transient_bytes = tokens * (6 * hidden + 2 * intermediate) * dtype_bytes
+
+    if freeze_vision_tower:
+        saved_bytes = 0.0
+    elif gradient_checkpointing:
+        saved_bytes = tokens * hidden * layers * dtype_bytes * 2.0
+    else:
+        saved_bytes = tokens * (6 * hidden + 2 * intermediate) * layers * dtype_bytes
+
+    projector_bytes = 0.0
+    if not freeze_multi_modal_projector:
+        projector_bytes = tokens * shape.hidden_size * dtype_bytes * 3.0
+    return transient_bytes + saved_bytes + projector_bytes
 
 
 def estimate_training_memory(
@@ -337,111 +578,181 @@ def estimate_training_memory(
     freeze_language_model: bool = False,
     image_max_pixels: int = 768 * 768,
     video_max_pixels: int = 256 * 256,
+    eval_batch_size: int = 0,
+    validation_enabled: bool = False,
+    freeze_trainable_layers: int = 2,
+    optimizer: str = "adamw_torch",
+    use_badam: bool = False,
+    badam_mode: str = "layer",
+    badam_update_ratio: float = 0.05,
 ) -> MemoryEstimate:
     devices = max(1, device_count)
     dtype_bytes = 4 if compute_type == "fp32" else 2
-    loaded_bytes_per_parameter = 0.65 if quantization_bit == "4" else 1.1 if quantization_bit == "8" else dtype_bytes
-    base_weight_gib = shape.parameter_count * loaded_bytes_per_parameter / GIB
+    quantization_enabled = finetuning_type in {"lora", "oft"} and quantization_bit in {"4", "8"}
+    if quantization_enabled and quantization_bit == "4":
+        loaded_bytes_per_parameter = 0.625  # packed weights plus block scales and quantization metadata
+    elif quantization_enabled:
+        loaded_bytes_per_parameter = 1.125
+    else:
+        loaded_bytes_per_parameter = dtype_bytes
+
+    base_model_bytes = shape.parameter_count * loaded_bytes_per_parameter
     zero_stage = int(deepspeed_stage) if deepspeed_stage in {"2", "3"} else 0
 
-    # Persistent memory includes weights, gradients, optimizer states, and fp32 master weights.
-    # ZeRO-2 shards gradients and optimizer states; ZeRO-3 also shards model weights.
+    text_parameters = shape.text_parameter_count or shape.parameter_count
+    vision_parameters = shape.vision_parameter_count
+    projector_parameters = shape.projector_parameter_count
     if finetuning_type == "full":
-        weight_memory = shape.parameter_count * dtype_bytes / GIB
-        trainable_fraction = 1.0
         if is_multimodal or shape.is_multimodal:
-            trainable_fraction = (
-                (0.84 if not freeze_language_model else 0.0)
-                + (0.15 if not freeze_vision_tower else 0.0)
-                + (0.01 if not freeze_multi_modal_projector else 0.0)
+            trainable_parameters = (
+                (0 if freeze_language_model else text_parameters)
+                + (0 if freeze_vision_tower else vision_parameters)
+                + (0 if freeze_multi_modal_projector else projector_parameters)
             )
-
-        trainable_parameters = max(1, int(shape.parameter_count * trainable_fraction))
-        gradient_memory = trainable_parameters * dtype_bytes / GIB
-        optimizer_memory = trainable_parameters * 8 / GIB
-        master_weight_memory = trainable_parameters * (4 if dtype_bytes < 4 else 0) / GIB
-        if zero_stage == 3:
-            persistent_gib = (weight_memory + gradient_memory + optimizer_memory + master_weight_memory) / devices
-        elif zero_stage == 2:
-            persistent_gib = weight_memory + (gradient_memory + optimizer_memory + master_weight_memory) / devices
         else:
-            persistent_gib = weight_memory + gradient_memory + optimizer_memory + master_weight_memory
-
-        if offload and zero_stage:
-            offloadable = optimizer_memory + master_weight_memory
-            if zero_stage == 3:
-                offloadable += weight_memory
-            persistent_gib -= 0.9 * offloadable / devices
+            trainable_parameters = shape.parameter_count
+    elif finetuning_type == "freeze":
+        layer_fraction = min(1.0, max(1, abs(freeze_trainable_layers)) / max(1, shape.num_hidden_layers))
+        trainable_parameters = max(1, int(text_parameters * layer_fraction))
+        if is_multimodal or shape.is_multimodal:
+            trainable_parameters += 0 if freeze_vision_tower else vision_parameters
+            trainable_parameters += 0 if freeze_multi_modal_projector else projector_parameters
+    elif finetuning_type == "oft":
+        trainable_parameters = max(1, int(shape.parameter_count * 0.004))
     else:
-        base_on_device = base_weight_gib / devices if zero_stage == 3 else base_weight_gib
-        if finetuning_type == "freeze":
-            trainable_parameters = int(shape.parameter_count * 0.05)
-        elif finetuning_type == "oft":
-            trainable_parameters = int(shape.parameter_count * 0.004)
-        else:
-            base_lora_parameters = _estimate_lora_parameters(shape, max(1, lora_rank))
-            trainable_parameters = base_lora_parameters
-            if is_multimodal or shape.is_multimodal:
-                trainable_parameters = 0 if freeze_language_model else base_lora_parameters
-                if not freeze_vision_tower:
-                    trainable_parameters += int(base_lora_parameters * 0.15)
-                if not freeze_multi_modal_projector:
-                    trainable_parameters += int(base_lora_parameters * 0.01)
+        base_lora_parameters = _estimate_lora_parameters(shape, max(1, lora_rank))
+        trainable_parameters = 0 if freeze_language_model else base_lora_parameters
+        if is_multimodal or shape.is_multimodal:
+            text_denominator = max(1, text_parameters)
+            if not freeze_vision_tower:
+                trainable_parameters += int(base_lora_parameters * vision_parameters / text_denominator)
+            if not freeze_multi_modal_projector:
+                trainable_parameters += max(
+                    1,
+                    int(base_lora_parameters * projector_parameters / text_denominator),
+                )
+        trainable_parameters = max(1, trainable_parameters)
 
-                trainable_parameters = max(1, trainable_parameters)
+    state_parameter_count = trainable_parameters
+    if use_badam and finetuning_type in {"full", "freeze"}:
+        active_ratio = (
+            1 / max(1, shape.num_hidden_layers) if badam_mode == "layer" else min(1.0, max(0.01, badam_update_ratio))
+        )
+        state_parameter_count = max(1, int(trainable_parameters * active_ratio))
 
-        trainable_states_gib = trainable_parameters * 16 / GIB
-        if zero_stage >= 2:
-            trainable_states_gib /= devices
-        if offload and zero_stage:
-            trainable_states_gib *= 0.35
-        persistent_gib = base_on_device + trainable_states_gib
+    adapter_parameters = trainable_parameters if finetuning_type in {"lora", "oft"} else 0
+    adapter_parameter_bytes = adapter_parameters * 4
+    gradient_bytes = state_parameter_count * (4 if finetuning_type in {"lora", "oft"} else dtype_bytes)
+    optimizer_bytes = state_parameter_count * _optimizer_state_bytes(optimizer)
+    master_weight_bytes = state_parameter_count * 4 if dtype_bytes < 4 and finetuning_type in {"full", "freeze"} else 0
 
-    # Preference optimization may keep reference or reward model weights on the device.
+    if zero_stage == 3:
+        model_device_bytes = base_model_bytes / devices
+        adapter_device_bytes = adapter_parameter_bytes  # small parameters commonly remain persistent
+        gradient_device_bytes = gradient_bytes / devices
+        optimizer_device_bytes = optimizer_bytes / devices
+        master_device_bytes = master_weight_bytes / devices
+    elif zero_stage == 2:
+        model_device_bytes = base_model_bytes
+        adapter_device_bytes = adapter_parameter_bytes
+        gradient_device_bytes = gradient_bytes / devices
+        optimizer_device_bytes = optimizer_bytes / devices
+        master_device_bytes = master_weight_bytes / devices
+    else:
+        model_device_bytes = base_model_bytes
+        adapter_device_bytes = adapter_parameter_bytes
+        gradient_device_bytes = gradient_bytes
+        optimizer_device_bytes = optimizer_bytes
+        master_device_bytes = master_weight_bytes
+
+    if offload and zero_stage == 2:
+        optimizer_device_bytes *= 0.05
+        master_device_bytes *= 0.05
+    elif offload and zero_stage == 3:
+        model_device_bytes *= 0.05
+        optimizer_device_bytes *= 0.05
+        master_device_bytes *= 0.05
+
+    auxiliary_model_factor = 0.0
     if stage in {"dpo", "kto"} and finetuning_type == "full":
-        persistent_gib += base_weight_gib / devices if zero_stage == 3 else base_weight_gib
+        auxiliary_model_factor = 1.0
     elif stage == "ppo":
-        persistent_gib += 1.5 * (base_weight_gib / devices if zero_stage == 3 else base_weight_gib)
+        auxiliary_model_factor = 2.0
+    auxiliary_model_bytes = auxiliary_model_factor * base_model_bytes
 
-    # Activations scale approximately with batch, sequence length, hidden size, and layer count.
-    activation_factor = 6.0 if gradient_checkpointing else 18.0
-    if booster == "liger_kernel":
-        activation_factor *= 0.82
-    if finetuning_type == "full":
-        activation_factor *= 1.12
-    if stage in {"dpo", "kto"}:
-        activation_factor *= 1.35
-    elif stage == "ppo":
-        activation_factor *= 1.8
+    model_gib = (model_device_bytes + auxiliary_model_bytes) / GIB
+    trainable_state_gib = (
+        adapter_device_bytes + gradient_device_bytes + optimizer_device_bytes + master_device_bytes
+    ) / GIB
+    persistent_gib = model_gib + trainable_state_gib
 
-    activation_gib = (
-        max(1, batch_size)
-        * max(1, cutoff_len)
-        * shape.hidden_size
-        * shape.num_hidden_layers
-        * dtype_bytes
-        * activation_factor
-        / GIB
+    fused_loss = booster == "liger_kernel" and stage in {"pt", "sft"}
+    training_activation_bytes = _estimate_text_activation_bytes(
+        shape,
+        batch_size=batch_size,
+        cutoff_len=cutoff_len,
+        dtype_bytes=dtype_bytes,
+        stage=stage,
+        gradient_checkpointing=gradient_checkpointing,
+        fused_loss=fused_loss,
+        training=True,
     )
-    logits_factor = 0.15 if booster == "liger_kernel" else 0.55
-    activation_gib += max(1, batch_size) * max(1, cutoff_len) * shape.vocab_size * dtype_bytes * logits_factor / GIB
     if is_multimodal or shape.is_multimodal:
-        vision_hidden_size = shape.vision_hidden_size or 1024
-        vision_layers = shape.vision_num_hidden_layers or 24
-        image_tokens = max(1, image_max_pixels) / (28 * 28)
-        video_tokens = 4 * max(1, video_max_pixels) / (28 * 28)
-        vision_backward_factor = 2.0 if freeze_vision_tower else 6.0
-        activation_gib += (
-            max(1, batch_size)
-            * (image_tokens + video_tokens)
-            * vision_hidden_size
-            * vision_layers
-            * dtype_bytes
-            * vision_backward_factor
-            / GIB
+        training_activation_bytes += _estimate_vision_activation_bytes(
+            shape,
+            batch_size=batch_size,
+            dtype_bytes=dtype_bytes,
+            stage=stage,
+            gradient_checkpointing=gradient_checkpointing,
+            freeze_vision_tower=freeze_vision_tower,
+            freeze_multi_modal_projector=freeze_multi_modal_projector,
+            image_max_pixels=image_max_pixels,
+            video_max_pixels=video_max_pixels,
         )
 
-    workspace_gib = 1.25 + 0.08 * persistent_gib
+    evaluation_activation_bytes = 0.0
+    if validation_enabled and stage != "ppo" and eval_batch_size > 0:
+        evaluation_activation_bytes = _estimate_text_activation_bytes(
+            shape,
+            batch_size=eval_batch_size,
+            cutoff_len=cutoff_len,
+            dtype_bytes=dtype_bytes,
+            stage=stage,
+            gradient_checkpointing=False,
+            fused_loss=fused_loss,
+            training=False,
+        )
+        if is_multimodal or shape.is_multimodal:
+            evaluation_activation_bytes += _estimate_vision_activation_bytes(
+                shape,
+                batch_size=eval_batch_size,
+                dtype_bytes=dtype_bytes,
+                stage=stage,
+                gradient_checkpointing=False,
+                freeze_vision_tower=True,
+                freeze_multi_modal_projector=True,
+                image_max_pixels=image_max_pixels,
+                video_max_pixels=video_max_pixels,
+            )
+
+    peak_kind = "validation" if evaluation_activation_bytes > training_activation_bytes else "training"
+    activation_bytes = max(training_activation_bytes, evaluation_activation_bytes)
+    activation_gib = activation_bytes / GIB
+
+    largest_layer_parameters = max(1, text_parameters // max(1, shape.num_hidden_layers))
+    communication_bytes = 0.0
+    if zero_stage == 2:
+        communication_bytes = min(0.95 * GIB, max(0.125 * GIB, gradient_device_bytes))
+    elif zero_stage == 3:
+        communication_bytes = largest_layer_parameters * dtype_bytes * 1.5
+    elif devices > 1:
+        communication_bytes = min(0.5 * GIB, max(0.1 * GIB, gradient_bytes * 0.05))
+
+    runtime_bytes = (1.0 + (0.35 if quantization_enabled else 0.0)) * GIB
+    subtotal_bytes = persistent_gib * GIB + activation_bytes + communication_bytes + runtime_bytes
+    fragmentation_ratio = 0.12 if quantization_enabled else 0.08
+    fragmentation_bytes = subtotal_bytes * fragmentation_ratio
+    workspace_gib = (communication_bytes + runtime_bytes + fragmentation_bytes) / GIB
     estimated_gib = max(1.0, persistent_gib + activation_gib + workspace_gib)
 
     return MemoryEstimate(
@@ -453,6 +764,10 @@ def estimate_training_memory(
         workspace_gib=round(workspace_gib, 2),
         per_device=True,
         weight_size_gib=round(shape.weight_size_bytes / GIB, 2),
+        model_gib=round(model_gib, 2),
+        trainable_state_gib=round(trainable_state_gib, 2),
+        trainable_parameter_count=trainable_parameters,
+        peak_kind=peak_kind,
     )
 
 

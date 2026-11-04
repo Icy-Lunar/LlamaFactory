@@ -13,20 +13,30 @@
 # limitations under the License.
 
 import json
+import os
 from html import escape
 from typing import TYPE_CHECKING, Any
 
 from transformers.trainer_utils import SchedulerType
 
 from ...extras.constants import TRAINING_STAGES
+from ...extras.liger import get_local_liger_status
 from ...extras.misc import get_device_count
 from ...extras.packages import is_gradio_available
 from ..common import DEFAULT_DATA_DIR, calculate_pixels
 from ..control import change_stage, list_checkpoints, list_datasets, list_output_dirs
-from ..locales import LOCALES, WIZARD_GUIDANCE_LOCALES, WIZARD_MEMORY_LOCALES, WIZARD_SUMMARY_LOCALES
-from ..memory import estimate_training_memory, get_device_memory_snapshot, read_model_shape
+from ..locales import (
+    LIGER_LOCALES,
+    LOCALES,
+    WIZARD_GUIDANCE_LOCALES,
+    WIZARD_MEMORY_LOCALES,
+    WIZARD_SUMMARY_LOCALES,
+    get_finetuning_label,
+)
+from ..memory import MemoryEstimate, estimate_training_memory, get_device_memory_snapshot, read_model_shape
+from ..stage_locales import GOAL_STAGES, STAGE_GOAL_CHOICES, STAGE_GUIDES, STAGE_VALIDATION_ERRORS
 from .data import create_preview_box
-from .top import create_top
+from .top import create_top, update_booster
 
 
 if is_gradio_available():
@@ -53,6 +63,13 @@ def _show_wizard_step(step: int) -> tuple[Any, Any, Any, Any]:
 
 def _guidance_text(lang: str | None) -> dict[str, Any]:
     return WIZARD_GUIDANCE_LOCALES.get(lang or "en", WIZARD_GUIDANCE_LOCALES["en"])
+
+
+def _default_compute_type(hardware: str = "mid") -> str:
+    configured = os.getenv("LLAMAFACTORY_DEFAULT_COMPUTE_TYPE", "").strip().lower()
+    if configured in {"bf16", "fp16", "fp32", "pure_bf16"}:
+        return configured
+    return "fp16" if hardware == "low" else "bf16"
 
 
 def _wizard_alert(message: str) -> str:
@@ -85,11 +102,7 @@ def _recommend_training_setup(
     quantization_bit: str,
 ) -> tuple[Any, ...]:
     text = _guidance_text(lang)
-    stage = {
-        "instruction": "Supervised Fine-Tuning",
-        "preference": "DPO",
-        "pretrain": "Pre-Training",
-    }.get(goal, "Supervised Fine-Tuning")
+    stage = GOAL_STAGES.get(goal, "Supervised Fine-Tuning")
 
     capacity = {"low": 0, "mid": 1, "high": 2, "multi": 3}.get(hardware, 1)
     inspection_error = False
@@ -121,7 +134,7 @@ def _recommend_training_setup(
 
     target_batch = 32 if hardware in {"high", "multi"} or priority == "speed" else 16
     gradient_accumulation_steps = max(1, (target_batch + batch_size - 1) // batch_size)
-    compute_type = "fp16" if hardware == "low" else "bf16"
+    compute_type = _default_compute_type(hardware)
     learning_rate = (
         "2e-5"
         if finetuning_type == "full"
@@ -137,7 +150,7 @@ def _recommend_training_setup(
     labels = text["result_labels"]
     values = (
         text["weight_size"].format(value=weight_size_gib),
-        finetuning_type,
+        get_finetuning_label(finetuning_type, lang or "en"),
         text["none"] if quantization_bit == "none" else f"{quantization_bit}-bit",
         compute_type,
         text["tokens"].format(value=cutoff_len),
@@ -173,7 +186,7 @@ def _recommend_training_setup(
         "cosine",
         ds_stage,
         False,
-        "liger_kernel",
+        "liger_kernel" if get_local_liger_status(model_path, compute_type).enabled else "none",
         result_html,
         not inspection_error,
         param_mode,
@@ -210,6 +223,44 @@ def _show_specialized_sections(finetuning_type: str, is_multimodal: bool) -> tup
     return gr.Accordion(visible=finetuning_type == "lora"), gr.Accordion(visible=is_multimodal)
 
 
+def _stage_guide(lang: str | None, training_stage: str) -> str:
+    stage = TRAINING_STAGES.get(training_stage, "sft")
+    return STAGE_GUIDES.get(lang or "en", STAGE_GUIDES["en"])[stage]
+
+
+def _show_stage_parameters(training_stage: str, lang: str | None) -> tuple[Any, ...]:
+    stage = TRAINING_STAGES.get(training_stage, "sft")
+    return (
+        _stage_guide(lang, training_stage),
+        gr.Group(visible=stage in {"sft", "pt"}),
+        gr.Group(visible=stage == "sft"),
+        gr.Group(visible=stage in {"dpo", "kto"}),
+        gr.Group(visible=stage == "dpo"),
+        gr.Group(visible=stage == "kto"),
+        gr.Group(visible=stage == "ppo"),
+        gr.Accordion(visible=stage != "ppo"),
+    )
+
+
+def _show_validation_parameters(mode: str) -> tuple[Any, Any, Any]:
+    return gr.Slider(visible=mode == "split"), gr.Dropdown(visible=mode == "separate"), gr.Row(visible=mode != "none")
+
+
+def _show_dpo_loss_parameters(loss: str) -> tuple[Any, Any]:
+    return gr.Slider(visible=loss == "sigmoid"), gr.Slider(visible=loss == "simpo")
+
+
+def _validation_error(lang: str | None, stage: str, mode: str, size: float, datasets: list[str] | None) -> str:
+    if TRAINING_STAGES.get(stage) == "ppo" or mode == "none":
+        return ""
+    errors = STAGE_VALIDATION_ERRORS.get(lang or "en", STAGE_VALIDATION_ERRORS["en"])
+    if mode == "separate" and not datasets:
+        return errors["dataset"]
+    if mode == "split" and not 0 < size < 100:
+        return errors["split"]
+    return ""
+
+
 def _memory_text(lang: str | None) -> dict[str, Any]:
     return WIZARD_MEMORY_LOCALES.get(lang or "en", WIZARD_MEMORY_LOCALES["en"])
 
@@ -224,26 +275,34 @@ def _parse_pixels(value: Any, default: int) -> int:
 def _build_memory_report(
     lang: str | None,
     status: str,
-    weight_size_gib: float,
-    parameter_count: int,
-    estimated_gib: float,
-    recommended_gib: float,
+    estimate: MemoryEstimate,
     free_gib: float | None,
     total_gib: float | None,
     device_count: int,
-    source: str,
+    parameter_source: str,
 ) -> str:
     text = _memory_text(lang)
     labels = text["labels"]
     available = text["unknown"] if free_gib is None or total_gib is None else f"{free_gib:.2f} / {total_gib:.2f} GiB"
+    trainable_parameters = (
+        f"{estimate.trainable_parameter_count / 1_000_000_000:.2f}B"
+        if estimate.trainable_parameter_count >= 1_000_000_000
+        else f"{estimate.trainable_parameter_count / 1_000_000:.2f}M"
+    )
     values = (
-        f"{weight_size_gib:.2f} GiB",
-        f"{parameter_count / 1_000_000_000:.2f}B",
-        f"{estimated_gib:.2f} GiB",
-        f"{recommended_gib:.2f} GiB",
+        f"{estimate.weight_size_gib:.2f} GiB",
+        f"{estimate.parameter_count / 1_000_000_000:.2f}B",
+        trainable_parameters,
+        f"{estimate.model_gib:.2f} GiB",
+        f"{estimate.trainable_state_gib:.2f} GiB",
+        f"{estimate.activation_gib:.2f} GiB",
+        f"{estimate.workspace_gib:.2f} GiB",
+        f"{estimate.estimated_gib:.2f} GiB",
+        f"{estimate.recommended_gib:.2f} GiB",
         available,
         str(device_count),
-        text["local_source"] if source == "local_weights" else text["unavailable_source"],
+        text["peak_kinds"][estimate.peak_kind],
+        text["sources"].get(parameter_source, text["sources"]["weight_size"]),
     )
     rows = "".join(
         f"<div><span>{escape(label)}</span><strong>{escape(value)}</strong></div>"
@@ -311,6 +370,8 @@ def _assess_training_memory(
     if "gradient_checkpointing" in extra_args:
         gradient_checkpointing = bool(extra_args["gradient_checkpointing"])
 
+    training_stage = TRAINING_STAGES.get(get("train.training_stage"), "sft")
+    validation_enabled = training_stage != "ppo" and get("train.validation_mode", "none") != "none"
     estimate = estimate_training_memory(
         model_shape,
         finetuning_type=get("top.finetuning_type", "lora"),
@@ -319,11 +380,16 @@ def _assess_training_memory(
         cutoff_len=int(get("train.cutoff_len", 2048)),
         batch_size=int(get("train.batch_size", 1)),
         lora_rank=int(get("train.lora_rank", 8)),
-        stage=TRAINING_STAGES.get(get("train.training_stage"), "sft"),
+        stage=training_stage,
         deepspeed_stage=get("train.ds_stage", "none"),
         offload=bool(get("train.ds_offload", False)),
         device_count=device_count,
-        booster=get("top.booster", "liger_kernel"),
+        booster=(
+            "liger_kernel"
+            if training_stage in {"pt", "sft"}
+            and get_local_liger_status(get("top.model_path"), get("train.compute_type", "bf16")).enabled
+            else "none"
+        ),
         gradient_checkpointing=gradient_checkpointing,
         is_multimodal=bool(get("train.model_is_multimodal", False)),
         freeze_vision_tower=bool(get("train.freeze_vision_tower", True)),
@@ -331,6 +397,13 @@ def _assess_training_memory(
         freeze_language_model=bool(get("train.freeze_language_model", False)),
         image_max_pixels=_parse_pixels(get("train.image_max_pixels", "768*768"), 768 * 768),
         video_max_pixels=_parse_pixels(get("train.video_max_pixels", "256*256"), 256 * 256),
+        eval_batch_size=int(get("train.eval_batch_size", 1)),
+        validation_enabled=validation_enabled,
+        freeze_trainable_layers=int(get("train.freeze_trainable_layers", 2)),
+        optimizer=str(extra_args.get("optim", "adamw_torch")),
+        use_badam=bool(get("train.use_badam", False)),
+        badam_mode=str(get("train.badam_mode", "layer")),
+        badam_update_ratio=float(get("train.badam_update_ratio", 0.05)),
     )
 
     if device_memory.free_gib is None:
@@ -345,14 +418,11 @@ def _assess_training_memory(
     report = _build_memory_report(
         lang,
         status,
-        estimate.weight_size_gib,
-        estimate.parameter_count,
-        estimate.estimated_gib,
-        estimate.recommended_gib,
+        estimate,
         device_memory.free_gib,
         device_memory.total_gib,
         device_count,
-        model_shape.source,
+        model_shape.parameter_source,
     )
     return report, status, estimate.estimated_gib, estimate.recommended_gib, device_memory.free_gib
 
@@ -429,11 +499,17 @@ def _build_wizard_summary(
         if quantization_bit == "none"
         else text["quantization"].format(bit=escape(quantization_bit))
     )
+    status = get_local_liger_status(model_path, compute_type)
+    acceleration_text = LIGER_LOCALES.get(lang, LIGER_LOCALES["en"])[status.reason]
     labels = text["labels"]
 
     rows = (
         (labels[0], f"{model_text}<small>{path_text}</small>"),
-        (labels[1], f"{escape(finetuning_type)} · {quantization_text} · {escape(booster)}"),
+        (
+            labels[1],
+            f"{escape(get_finetuning_label(finetuning_type, lang))} · {quantization_text} · "
+            f"{escape(acceleration_text)}",
+        ),
         (labels[2], f"{training_stage_text}<small>{dataset_text}</small>"),
         (
             labels[3],
@@ -480,6 +556,9 @@ def _validate_params_and_build_summary(
     gradient_accumulation_steps: int,
     compute_type: str,
     output_dir: str | None,
+    validation_mode: str = "none",
+    val_size: float = 10,
+    eval_dataset: list[str] | None = None,
 ) -> tuple[Any, ...]:
     text = _guidance_text(lang)
     error = ""
@@ -498,6 +577,9 @@ def _validate_params_and_build_summary(
 
     if not error and (batch_size < 1 or gradient_accumulation_steps < 1):
         error = text["error_batch"]
+
+    if not error:
+        error = _validation_error(lang, training_stage, validation_mode, val_size, eval_dataset)
 
     if error:
         return (gr.HTML(), _wizard_alert(error), *_show_wizard_step(3))
@@ -540,7 +622,7 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             wizard_questionnaire = gr.Markdown(_localized_value("wizard_questionnaire"))
             with gr.Row():
                 wizard_goal = gr.Radio(
-                    choices=guidance["goal_choices"],
+                    choices=STAGE_GOAL_CHOICES["en"],
                     value="instruction",
                     label=guidance["goal_label"],
                     info=guidance["goal_info"],
@@ -574,10 +656,10 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             wizard_data_guide = gr.Markdown(_localized_value("wizard_data_guide"))
             stages = list(TRAINING_STAGES.keys())
             training_stage = gr.Dropdown(choices=stages, value=stages[0], visible=False)
-            dataset_dir = gr.Textbox(value=DEFAULT_DATA_DIR, visible=False)
+            dataset_dir = gr.Textbox(value=DEFAULT_DATA_DIR)
             with gr.Row():
                 dataset = gr.Dropdown(multiselect=True, allow_custom_value=True, scale=5)
-                preview_elems = create_preview_box(dataset_dir, dataset)
+                preview_elems = create_preview_box(dataset_dir, dataset, engine.manager.get_elem_by_id("top.lang"))
 
         wizard_data_alert = gr.HTML()
         with gr.Row(elem_classes="oobe-nav"):
@@ -598,7 +680,9 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         with gr.Group(visible=False, elem_classes="oobe-card oobe-branch-panel") as wizard_resource_params_group:
             wizard_resource_params_guide = gr.Markdown(_localized_value("wizard_resource_params_guide"))
             with gr.Row():
-                compute_type = gr.Dropdown(choices=["bf16", "fp16", "fp32", "pure_bf16"], value="bf16")
+                compute_type = gr.Dropdown(
+                    choices=["bf16", "fp16", "fp32", "pure_bf16"], value=_default_compute_type()
+                )
                 cutoff_len = gr.Slider(minimum=4, maximum=131072, value=2048, step=1)
                 batch_size = gr.Slider(minimum=1, maximum=1024, value=2, step=1)
                 gradient_accumulation_steps = gr.Slider(minimum=1, maximum=1024, value=8, step=1)
@@ -625,7 +709,54 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
                 logging_steps = gr.Slider(minimum=1, maximum=1000, value=5, step=1)
                 save_steps = gr.Slider(minimum=10, maximum=5000, value=100, step=10)
                 warmup_steps = gr.Slider(minimum=0, maximum=5000, value=0, step=1)
-                packing = gr.Checkbox()
+
+        with gr.Accordion(
+            _localized_label("wizard_stage_params"), open=False, elem_classes="oobe-advanced"
+        ) as wizard_stage_params:
+            wizard_stage_guide = gr.Markdown(_stage_guide("en", "Supervised Fine-Tuning"))
+            with gr.Group() as text_stage_params:
+                with gr.Row():
+                    packing = gr.Checkbox()
+                    resize_vocab = gr.Checkbox()
+            with gr.Group() as sft_stage_params:
+                with gr.Row():
+                    train_on_prompt = gr.Checkbox()
+                    mask_history = gr.Checkbox()
+                    neat_packing = gr.Checkbox()
+                neftune_alpha = gr.Slider(minimum=0, maximum=10, value=0, step=0.1)
+            with gr.Group(visible=False) as preference_stage_params:
+                pref_beta = gr.Slider(minimum=0.01, maximum=1, value=0.1, step=0.01)
+            with gr.Group(visible=False) as dpo_stage_params:
+                with gr.Row():
+                    pref_ftx = gr.Slider(minimum=0, maximum=10, value=0, step=0.01)
+                    pref_loss = gr.Dropdown(
+                        value="sigmoid", choices=["sigmoid", "hinge", "ipo", "kto_pair", "orpo", "simpo"]
+                    )
+                dpo_label_smoothing = gr.Slider(minimum=0, maximum=0.5, value=0, step=0.01)
+                simpo_gamma = gr.Slider(minimum=0, maximum=10, value=0.5, step=0.1, visible=False)
+            with gr.Group(visible=False) as kto_stage_params:
+                with gr.Row():
+                    kto_chosen_weight = gr.Slider(minimum=0.01, maximum=10, value=1, step=0.01)
+                    kto_rejected_weight = gr.Slider(minimum=0.01, maximum=10, value=1, step=0.01)
+            with gr.Group(visible=False) as ppo_stage_params:
+                reward_model = gr.Dropdown(multiselect=True, allow_custom_value=True)
+                with gr.Row():
+                    ppo_epochs = gr.Slider(minimum=1, maximum=16, value=4, step=1)
+                    ppo_buffer_size = gr.Slider(minimum=1, maximum=32, value=1, step=1)
+                    ppo_target = gr.Slider(minimum=0.1, maximum=20, value=6, step=0.1)
+                with gr.Row():
+                    ppo_score_norm = gr.Checkbox()
+                    ppo_whiten_rewards = gr.Checkbox()
+
+        with gr.Accordion(
+            _localized_label("wizard_validation_params"), open=False, elem_classes="oobe-advanced"
+        ) as wizard_validation_params:
+            wizard_validation_guide = gr.Markdown(_localized_value("wizard_validation_guide"))
+            validation_mode = gr.Radio(choices=LOCALES["validation_mode"]["en"]["choices"], value="none")
+            val_size = gr.Slider(minimum=1, maximum=50, value=10, step=1, visible=False)
+            eval_dataset = gr.Dropdown(multiselect=True, allow_custom_value=True, visible=False)
+            with gr.Row(visible=False) as validation_schedule:
+                eval_batch_size = gr.Slider(minimum=1, maximum=1024, value=1, step=1)
 
         with gr.Accordion(
             _localized_label("lora_tab"), open=False, visible=True, elem_classes="oobe-advanced"
@@ -662,15 +793,10 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         # Compatibility values remain part of saved configurations, but are intentionally
         # absent from the guided interface. The wizard owns safe defaults for them.
         with gr.Group(visible=False):
-            neftune_alpha = gr.Slider(minimum=0, maximum=10, value=0, step=0.1)
             extra_args = gr.Textbox(value='{"optim": "adamw_torch"}')
-            neat_packing = gr.Checkbox()
-            train_on_prompt = gr.Checkbox()
-            mask_history = gr.Checkbox()
-            resize_vocab = gr.Checkbox()
             use_llama_pro = gr.Checkbox()
             enable_thinking = gr.Checkbox(value=True)
-            report_to = gr.Dropdown(value="none", choices=["none"])
+            report_to = gr.Dropdown(value="tensorboard", choices=["tensorboard"])
             freeze_trainable_layers = gr.Slider(minimum=-128, maximum=128, value=2, step=1)
             freeze_trainable_modules = gr.Textbox(value="all")
             freeze_extra_modules = gr.Textbox()
@@ -679,12 +805,6 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             use_pissa = gr.Checkbox()
             lora_target = gr.Textbox()
             additional_target = gr.Textbox()
-            pref_beta = gr.Slider(minimum=0, maximum=1, value=0.1, step=0.01)
-            pref_ftx = gr.Slider(minimum=0, maximum=10, value=0, step=0.01)
-            pref_loss = gr.Dropdown(value="sigmoid", choices=["sigmoid"])
-            reward_model = gr.Dropdown(multiselect=True, allow_custom_value=True)
-            ppo_score_norm = gr.Checkbox()
-            ppo_whiten_rewards = gr.Checkbox()
             use_galore = gr.Checkbox()
             galore_rank = gr.Slider(minimum=1, maximum=1024, value=16, step=1)
             galore_update_interval = gr.Slider(minimum=1, maximum=2048, value=200, step=1)
@@ -746,6 +866,7 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
 
                 with gr.Row():
                     output_box = gr.Markdown()
+                    tensorboard_link = gr.Markdown(visible=False)
 
             with gr.Column(scale=1):
                 loss_viewer = gr.Plot(visible=False)
@@ -798,9 +919,20 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             pref_beta,
             pref_ftx,
             pref_loss,
+            dpo_label_smoothing,
+            simpo_gamma,
+            kto_chosen_weight,
+            kto_rejected_weight,
             reward_model,
             ppo_score_norm,
             ppo_whiten_rewards,
+            ppo_epochs,
+            ppo_buffer_size,
+            ppo_target,
+            validation_mode,
+            val_size,
+            eval_dataset,
+            eval_batch_size,
             freeze_vision_tower,
             freeze_multi_modal_projector,
             freeze_language_model,
@@ -843,13 +975,19 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         top_elems["booster"],
         device_count,
         training_stage,
+        validation_mode,
+        eval_batch_size,
         compute_type,
         cutoff_len,
         batch_size,
         lora_rank,
+        freeze_trainable_layers,
         ds_stage,
         ds_offload,
         extra_args,
+        use_badam,
+        badam_mode,
+        badam_update_ratio,
         model_is_multimodal,
         freeze_vision_tower,
         freeze_multi_modal_projector,
@@ -878,6 +1016,10 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             wizard_learning_params_guide=wizard_learning_params_guide,
             wizard_common_params=wizard_common_params,
             wizard_common_params_guide=wizard_common_params_guide,
+            wizard_stage_params=wizard_stage_params,
+            wizard_stage_guide=wizard_stage_guide,
+            wizard_validation_params=wizard_validation_params,
+            wizard_validation_guide=wizard_validation_guide,
             lora_tab=wizard_lora_params,
             wizard_lora_params_guide=wizard_lora_params_guide,
             mm_tab=wizard_multimodal_params,
@@ -937,9 +1079,20 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             pref_beta=pref_beta,
             pref_ftx=pref_ftx,
             pref_loss=pref_loss,
+            dpo_label_smoothing=dpo_label_smoothing,
+            simpo_gamma=simpo_gamma,
+            kto_chosen_weight=kto_chosen_weight,
+            kto_rejected_weight=kto_rejected_weight,
             reward_model=reward_model,
             ppo_score_norm=ppo_score_norm,
             ppo_whiten_rewards=ppo_whiten_rewards,
+            ppo_epochs=ppo_epochs,
+            ppo_buffer_size=ppo_buffer_size,
+            ppo_target=ppo_target,
+            validation_mode=validation_mode,
+            val_size=val_size,
+            eval_dataset=eval_dataset,
+            eval_batch_size=eval_batch_size,
             freeze_vision_tower=freeze_vision_tower,
             freeze_multi_modal_projector=freeze_multi_modal_projector,
             freeze_language_model=freeze_language_model,
@@ -980,10 +1133,11 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             resume_btn=resume_btn,
             progress_bar=progress_bar,
             output_box=output_box,
+            tensorboard_link=tensorboard_link,
             loss_viewer=loss_viewer,
         )
     )
-    output_elems = [output_box, progress_bar, loss_viewer, swanlab_link, start_btn, stop_btn]
+    output_elems = [output_box, progress_bar, loss_viewer, swanlab_link, tensorboard_link, start_btn, stop_btn]
 
     wizard_steps = [model_step, data_step, params_step, review_step]
     branch_inputs = [wizard_param_mode]
@@ -992,6 +1146,36 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         _show_param_branch,
         inputs=branch_inputs,
         outputs=branch_outputs,
+        queue=False,
+    )
+    training_stage.change(
+        _show_stage_parameters,
+        inputs=[training_stage, top_elems["lang"]],
+        outputs=[
+            wizard_stage_guide,
+            text_stage_params,
+            sft_stage_params,
+            preference_stage_params,
+            dpo_stage_params,
+            kto_stage_params,
+            ppo_stage_params,
+            wizard_validation_params,
+        ],
+        queue=False,
+    )
+    top_elems["lang"].change(
+        _stage_guide, inputs=[top_elems["lang"], training_stage], outputs=[wizard_stage_guide], queue=False
+    )
+    validation_mode.change(
+        _show_validation_parameters,
+        inputs=[validation_mode],
+        outputs=[val_size, eval_dataset, validation_schedule],
+        queue=False,
+    )
+    pref_loss.change(
+        _show_dpo_loss_parameters,
+        inputs=[pref_loss],
+        outputs=[dpo_label_smoothing, simpo_gamma],
         queue=False,
     )
     recommendation_inputs = [
@@ -1084,7 +1268,7 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
     ]
     wizard_params_next_btn.click(
         _validate_params_and_build_summary,
-        inputs=summary_inputs,
+        inputs=[*summary_inputs, validation_mode, val_size, eval_dataset],
         outputs=[wizard_summary, wizard_params_alert, *wizard_steps],
         queue=False,
     )
@@ -1145,13 +1329,19 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         top_elems["quantization_bit"],
         top_elems["booster"],
         training_stage,
+        validation_mode,
+        eval_batch_size,
         compute_type,
         cutoff_len,
         batch_size,
         lora_rank,
+        freeze_trainable_layers,
         ds_stage,
         ds_offload,
         extra_args,
+        use_badam,
+        badam_mode,
+        badam_update_ratio,
         reward_model,
         model_is_multimodal,
         freeze_vision_tower,
@@ -1172,6 +1362,7 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         top_elems["quantization_bit"],
         top_elems["booster"],
         compute_type,
+        badam_mode,
     ):
         live_memory_dropdown.input(
             lambda data: _run_live_memory_estimate(data, engine.manager),
@@ -1179,7 +1370,14 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             outputs=[wizard_live_memory_report],
             concurrency_limit=None,
         )
-    for live_memory_slider in (cutoff_len, batch_size, lora_rank):
+    for live_memory_slider in (
+        cutoff_len,
+        batch_size,
+        lora_rank,
+        eval_batch_size,
+        freeze_trainable_layers,
+        badam_update_ratio,
+    ):
         live_memory_slider.release(
             lambda data: _run_live_memory_estimate(data, engine.manager),
             inputs=memory_input_elems,
@@ -1190,6 +1388,7 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         freeze_vision_tower,
         freeze_multi_modal_projector,
         freeze_language_model,
+        use_badam,
     ):
         live_memory_checkbox.input(
             lambda data: _run_live_memory_estimate(data, engine.manager),
@@ -1204,10 +1403,30 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
             outputs=[wizard_live_memory_report],
             concurrency_limit=None,
         )
+    for live_memory_selection in (validation_mode, training_stage):
+        live_memory_selection.change(
+            lambda data: _run_live_memory_estimate(data, engine.manager),
+            inputs=memory_input_elems,
+            outputs=[wizard_live_memory_report],
+            concurrency_limit=None,
+        )
 
     dataset.focus(list_datasets, [dataset_dir, training_stage], [dataset], queue=False)
+    for component in (lang, top_elems["model_path"], compute_type):
+        component.change(
+            update_booster, [lang, top_elems["model_path"], compute_type], [top_elems["booster"]], queue=False
+        )
+    eval_dataset.focus(list_datasets, [dataset_dir, training_stage], [eval_dataset], queue=False)
     training_stage.change(change_stage, [training_stage], [dataset, packing], queue=False)
-    reward_model.focus(list_checkpoints, [model_name, finetuning_type], [reward_model], queue=False)
+    training_stage.change(lambda: [], outputs=[eval_dataset], queue=False)
+    reward_model.focus(
+        lambda name, method: list_checkpoints(name, method, reset_selection=False),
+        [model_name, finetuning_type],
+        [reward_model],
+        queue=False,
+    )
+    finetuning_type.change(list_checkpoints, [model_name, finetuning_type], [reward_model], queue=False)
+    model_name.change(list_checkpoints, [model_name, finetuning_type], [reward_model], queue=False)
     model_name.change(list_output_dirs, [model_name, finetuning_type, current_time], [output_dir], queue=False)
     finetuning_type.change(list_output_dirs, [model_name, finetuning_type, current_time], [output_dir], queue=False)
     output_dir.change(

@@ -35,16 +35,6 @@ if TYPE_CHECKING:
     from ..engine import Engine
 
 
-GPTQ_BITS = ["8", "4", "3", "2"]
-
-
-def can_quantize(checkpoint_path: str | list[str]) -> "gr.Dropdown":
-    if isinstance(checkpoint_path, list) and len(checkpoint_path) != 0:
-        return gr.Dropdown(value="none", interactive=False)
-    else:
-        return gr.Dropdown(interactive=True)
-
-
 def save_model(
     lang: str,
     model_name: str,
@@ -53,8 +43,6 @@ def save_model(
     checkpoint_path: str | list[str],
     template: str,
     export_size: int,
-    export_quantization_bit: str,
-    export_quantization_dataset: str,
     export_device: str,
     export_legacy_format: bool,
     export_dir: str,
@@ -67,12 +55,8 @@ def save_model(
         error = ALERTS["err_no_model"][lang]
     elif not export_dir:
         error = ALERTS["err_no_export_dir"][lang]
-    elif export_quantization_bit in GPTQ_BITS and not export_quantization_dataset:
-        error = ALERTS["err_no_dataset"][lang]
-    elif export_quantization_bit not in GPTQ_BITS and not checkpoint_path:
+    elif not checkpoint_path:
         error = ALERTS["err_no_adapter"][lang]
-    elif export_quantization_bit in GPTQ_BITS and checkpoint_path and isinstance(checkpoint_path, list):
-        error = ALERTS["err_gptq_lora"][lang]
 
     if error:
         gr.Warning(error)
@@ -87,8 +71,7 @@ def save_model(
         export_dir=export_dir,
         export_hub_model_id=None,
         export_size=export_size,
-        export_quantization_bit=int(export_quantization_bit) if export_quantization_bit in GPTQ_BITS else None,
-        export_quantization_dataset=export_quantization_dataset,
+        export_quantization_bit=None,
         export_device=export_device,
         export_legacy_format=export_legacy_format,
         trust_remote_code=True,
@@ -123,11 +106,7 @@ def create_export_tab(engine: "Engine") -> dict[str, "Component"]:
             merge_settings_guide = gr.Markdown(LOCALES["merge_settings_guide"]["en"]["value"])
             with gr.Row():
                 export_size = gr.Slider(minimum=1, maximum=100, value=5, step=1)
-                export_quantization_bit = gr.Dropdown(choices=["none"] + GPTQ_BITS, value="none")
                 export_device = gr.Radio(choices=["cpu", "auto"], value="cpu")
-
-            with gr.Row():
-                export_quantization_dataset = gr.Textbox(value="data/c4_demo.jsonl", scale=2)
                 export_legacy_format = gr.Checkbox(scale=1)
 
         with gr.Group(elem_classes="merge-card"):
@@ -139,7 +118,6 @@ def create_export_tab(engine: "Engine") -> dict[str, "Component"]:
         )
         info_box = gr.Textbox(show_label=False, interactive=False, elem_classes="merge-status")
 
-    checkpoint_path.change(can_quantize, [checkpoint_path], [export_quantization_bit], queue=False)
     checkpoint_path.focus(
         lambda name, method: list_checkpoints(name, method, reset_selection=False),
         [engine.manager.get_elem_by_id("top.model_name"), merge_finetuning_type],
@@ -157,8 +135,6 @@ def create_export_tab(engine: "Engine") -> dict[str, "Component"]:
             checkpoint_path,
             engine.manager.get_elem_by_id("top.template"),
             export_size,
-            export_quantization_bit,
-            export_quantization_dataset,
             export_device,
             export_legacy_format,
             export_dir,
@@ -168,8 +144,6 @@ def create_export_tab(engine: "Engine") -> dict[str, "Component"]:
 
     return dict(
         export_size=export_size,
-        export_quantization_bit=export_quantization_bit,
-        export_quantization_dataset=export_quantization_dataset,
         export_device=export_device,
         export_legacy_format=export_legacy_format,
         export_dir=export_dir,

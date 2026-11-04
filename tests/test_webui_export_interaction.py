@@ -18,6 +18,19 @@ def test_merge_action_uses_adapter_selected_in_merge_workspace() -> None:
 
     assert merge_action.inputs[4] is merge["checkpoint_path"]
     assert merge_action.inputs[4] is not top["checkpoint_path"]
+    assert "export_quantization_bit" not in merge
+    assert "export_quantization_dataset" not in merge
+
+
+def test_merge_remains_available_without_a_second_quantization_backend(tmp_path, monkeypatch):
+    captured = []
+    monkeypatch.setattr("llamafactory.webui.components.export.export_model", captured.append)
+    monkeypatch.setattr("llamafactory.webui.components.export.torch_gc", lambda: None)
+    monkeypatch.setattr("llamafactory.webui.components.export.load_config", lambda: {})
+    list(save_model("en", "model", str(tmp_path), "lora", ["adapter"], "default", 5, "cpu", False, "merged"))
+    assert len(captured) == 1
+    assert captured[0]["export_quantization_bit"] is None
+    assert captured[0]["adapter_name_or_path"]
 
 
 def test_reopening_adapter_selectors_preserves_existing_selection() -> None:
@@ -38,13 +51,13 @@ def test_reopening_adapter_selectors_preserves_existing_selection() -> None:
 @pytest.mark.parametrize(
     ("method", "bit", "finetuning_type", "expected_bit", "interactive"),
     [
-        ("hqq", "2", "lora", "2", True),
-        ("eetq", "4", "lora", "none", True),
+        ("hqq", "2", "lora", "none", True),
+        ("eetq", "4", "lora", "4", True),
         ("bnb", "8", "lora", "8", True),
         ("hqq", "4", "full", "none", False),
     ],
 )
-def test_changing_quantization_method_preserves_only_compatible_choices(
+def test_restored_quantization_uses_only_bnb_compatible_bits(
     method, bit, finetuning_type, expected_bit, interactive
 ) -> None:
     update = can_quantize_to(method, bit, finetuning_type)

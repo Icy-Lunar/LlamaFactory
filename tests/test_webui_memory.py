@@ -1,5 +1,6 @@
 import json
 from dataclasses import replace
+from math import prod
 
 import pytest
 
@@ -197,3 +198,114 @@ def test_weight_scan_prefers_safetensors_and_ignores_duplicate_bin_format(tmp_pa
     (tmp_path / "optimizer.pt").write_bytes(b"c" * 53)
 
     assert get_local_weight_size(str(tmp_path)) == (17, 1)
+
+
+def test_read_model_shape_uses_exact_safetensors_tensor_metadata(tmp_path) -> None:
+    config = {
+        "hidden_size": 8,
+        "intermediate_size": 16,
+        "num_attention_heads": 2,
+        "num_hidden_layers": 1,
+        "num_key_value_heads": 1,
+        "torch_dtype": "float16",
+        "vocab_size": 16,
+    }
+    tensors = {
+        "model.embed_tokens.weight": {"dtype": "F16", "shape": [16, 8], "data_offsets": [0, 256]},
+        "model.layers.0.mlp.weight": {"dtype": "F16", "shape": [8, 8], "data_offsets": [256, 384]},
+    }
+    encoded_header = json.dumps(tensors, separators=(",", ":")).encode("utf-8")
+    encoded_header += b" " * (-len(encoded_header) % 8)
+    (tmp_path / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    (tmp_path / "model.safetensors").write_bytes(
+        len(encoded_header).to_bytes(8, byteorder="little") + encoded_header + bytes(384)
+    )
+
+    shape = read_model_shape(str(tmp_path))
+
+    assert shape.parameter_count == sum(prod(tensor["shape"]) for tensor in tensors.values())
+    assert shape.weight_bytes_per_parameter == 2.0
+    assert shape.parameter_source == "safetensors_metadata"
+
+
+def test_gradient_checkpointing_reduces_activation_peak() -> None:
+    shape = _qwen_shape()
+    checkpointed = _estimate(shape, gradient_checkpointing=True)
+    uncheckpointed = _estimate(shape, gradient_checkpointing=False)
+
+    assert uncheckpointed.activation_gib > checkpointed.activation_gib
+    assert uncheckpointed.estimated_gib > checkpointed.estimated_gib
+
+
+def test_validation_forward_peak_is_estimated_separately() -> None:
+    shape = _qwen_shape()
+    training_only = _estimate(shape, batch_size=1, validation_enabled=False)
+    with_validation = _estimate(
+        shape,
+        batch_size=1,
+        validation_enabled=True,
+        eval_batch_size=16,
+    )
+
+    assert training_only.peak_kind == "training"
+    assert with_validation.peak_kind == "validation"
+    assert with_validation.activation_gib > training_only.activation_gib
+
+
+def test_memory_breakdown_reconstructs_estimated_peak() -> None:
+    estimate = _estimate(_qwen_shape())
+
+    reconstructed = (
+        estimate.model_gib + estimate.trainable_state_gib + estimate.activation_gib + estimate.workspace_gib
+    )
+    assert estimate.persistent_gib == pytest.approx(estimate.model_gib + estimate.trainable_state_gib, abs=0.02)
+    assert estimate.estimated_gib == pytest.approx(reconstructed, abs=0.03)
+
+
+def test_optimizer_and_offload_are_reflected_in_training_states() -> None:
+    shape = _qwen_shape()
+    adamw = _estimate(shape, finetuning_type="full", quantization_bit="none", optimizer="adamw_torch")
+    eight_bit = _estimate(shape, finetuning_type="full", quantization_bit="none", optimizer="paged_adamw_8bit")
+    zero_offload = _estimate(
+        shape,
+        finetuning_type="full",
+        quantization_bit="none",
+        optimizer="adamw_torch",
+        deepspeed_stage="2",
+        device_count=4,
+        offload=True,
+    )
+    badam = _estimate(
+        shape,
+        finetuning_type="full",
+        quantization_bit="none",
+        optimizer="adamw_torch",
+        use_badam=True,
+        badam_mode="layer",
+    )
+
+    assert eight_bit.trainable_state_gib < adamw.trainable_state_gib
+    assert zero_offload.trainable_state_gib < adamw.trainable_state_gib
+    assert badam.trainable_state_gib < adamw.trainable_state_gib
+
+
+def test_freeze_layer_count_changes_trainable_state_memory() -> None:
+    shape = _qwen_shape()
+    two_layers = _estimate(shape, finetuning_type="freeze", quantization_bit="none", freeze_trainable_layers=2)
+    eight_layers = _estimate(shape, finetuning_type="freeze", quantization_bit="none", freeze_trainable_layers=8)
+
+    assert eight_layers.trainable_parameter_count > two_layers.trainable_parameter_count
+    assert eight_layers.trainable_state_gib > two_layers.trainable_state_gib
+
+
+def test_moe_counts_all_expert_adapters_but_only_active_expert_activations() -> None:
+    dense = _qwen_shape()
+    moe_two_active = replace(dense, num_local_experts=8, num_experts_per_tok=2)
+    moe_all_active = replace(moe_two_active, num_experts_per_tok=8)
+
+    dense_estimate = _estimate(dense)
+    sparse_estimate = _estimate(moe_two_active)
+    dense_moe_estimate = _estimate(moe_all_active)
+
+    assert sparse_estimate.trainable_parameter_count > dense_estimate.trainable_parameter_count
+    assert dense_moe_estimate.activation_gib > sparse_estimate.activation_gib

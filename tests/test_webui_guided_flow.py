@@ -60,6 +60,9 @@ def test_live_memory_guidance_is_available_for_every_language() -> None:
     assert WIZARD_MEMORY_LOCALES.keys() == WIZARD_GUIDANCE_LOCALES.keys()
     for lang, text in WIZARD_MEMORY_LOCALES.items():
         assert text["live_intro"]
+        assert len(text["labels"]) == 13
+        assert set(text["peak_kinds"]) == {"training", "validation"}
+        assert set(text["sources"]) == {"safetensors_metadata", "config_architecture", "weight_size"}
         assert LOCALES["wizard_live_memory_intro"][lang]["value"] == text["live_intro"]
 
 
@@ -88,6 +91,13 @@ def test_first_step_exposes_method_and_optional_quantization() -> None:
     assert "full" in [value for _, value in top["finetuning_type"].choices]
     assert top["quantization_bit"].visible is True
     assert top["quantization_bit"].value == "none"
+
+
+def test_platform_profile_can_choose_a_safe_default_compute_type(monkeypatch) -> None:
+    monkeypatch.setenv("LLAMAFACTORY_DEFAULT_COMPUTE_TYPE", "fp16")
+    assert train_components._default_compute_type("high") == "fp16"
+    monkeypatch.setenv("LLAMAFACTORY_DEFAULT_COMPUTE_TYPE", "unsupported")
+    assert train_components._default_compute_type("high") == "bf16"
 
 
 def test_live_memory_assessment_uses_current_batch_size(tmp_path, monkeypatch) -> None:

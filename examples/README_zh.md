@@ -189,32 +189,10 @@ llamafactory-cli export examples/merge_lora/qwen3_gptq.yaml
 llamafactory-cli export examples/merge_lora/qwen3_full_sft.yaml
 ```
 
-### 推理 LoRA 模型
+### 训练后快速测试
 
-#### 使用 vLLM 多卡推理评估
-
-```
-python scripts/vllm_infer.py --model_name_or_path Qwen/Qwen3-4B-Instruct-2507 --template qwen3_nothink --dataset alpaca_en_demo
-python scripts/eval_bleu_rouge.py generated_predictions.jsonl
-```
-
-#### 使用命令行对话框
-
-```bash
-llamafactory-cli chat examples/inference/qwen3_lora_sft.yaml
-```
-
-#### 使用浏览器对话框
-
-```bash
-llamafactory-cli webchat examples/inference/qwen3_lora_sft.yaml
-```
-
-#### 启动 OpenAI 风格 API
-
-```bash
-llamafactory-cli api examples/inference/qwen3_lora_sft.yaml
-```
+运行 `llamafactory-cli webui`，打开“快速测试”，然后选择本地基础模型目录。测试 LoRA 检查点时，
+再选择对应的本地适配器目录。快速测试工作区仅使用 Hugging Face Transformers。
 
 ### 杂项
 

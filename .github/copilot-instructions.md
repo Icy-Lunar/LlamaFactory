@@ -136,14 +136,13 @@ pip3 install build && python3 -m build
 - accelerate for distributed training
 - gradio for web UI
 - trl for reinforcement learning
-- Optional: vllm/sglang for inference, flash-attention-2, unsloth, liger-kernel
+- Optional: flash-attention-2, unsloth, liger-kernel
 
 ## Entry Points
 
 - **CLI Training**: `llamafactory-cli train --config examples/train_lora/llama3_lora_sft.yaml`
 - **Web UI**: `llamafactory-cli webui` or `python src/webui.py`
-- **API Server**: `llamafactory-cli api` or `python src/api.py`
-- **Chat Interface**: `llamafactory-cli chat --model_name_or_path MODEL_PATH`
+- **Quick model test**: launch `llamafactory-cli webui` and open the Hugging Face-only quick-test workspace
 
 ## Environment Setup
 
@@ -154,7 +153,7 @@ pip install -e ".[dev]"
 
 ## Important Notes
 
-- The project supports multiple backends: default PyTorch, vLLM, SGLang
+- The quick-test workspace uses the local Hugging Face Transformers engine only
 - Megatron-core training is supported via mcore_adapter
 - SwanLab and W&B are supported for experiment tracking
 - Docker support is available with pre-built images
