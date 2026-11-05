@@ -107,6 +107,7 @@ def gdn_forward_with_cp(self, hidden_states, attention_mask=None, **kwargs):
         global_position_ids = torch.cat(global_position_ids, dim=-1).contiguous()
         try:
             from transformers.modeling_flash_attention_utils import prepare_fa_kwargs_from_position_ids
+
             cu_seqlens = prepare_fa_kwargs_from_position_ids(global_position_ids)[0][0]
         except ImportError:
             cu_seqlens = None

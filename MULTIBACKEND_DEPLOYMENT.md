@@ -177,3 +177,26 @@ mask common token/password patterns, but this is not a guarantee of complete san
 训练原始日志和向导日志不截断，请关注磁盘空间，训练后自行归档。第三方输出可能包含
 本地路径或数据样例，分享前请检查；界面和会话日志会遮盖常见令牌、密码格式，但不保证
 所有敏感信息均已被识别。真实 ROCm/WSL GPU 验收需要在远程机器重新启动训练后完成。
+
+## CI and release safety follow-up / CI 与发布安全修正
+
+The Hugging Face-only fork removes the obsolete `infer_backend` check from KT
+loading instead of restoring a removed selector. Regression tests cover LoRA/full
+configuration, disabled KT, and a missing optional integration. These are CPU
+configuration tests, not a claim that KT or ROCm GPU execution was verified.
+Previously added Python files now carry the repository's Apache-2.0 headers;
+whole-tree lint, format, license checks and package build remain enabled.
+
+仅保留 Hugging Face 的分支删除了 KT 加载路径中失效的 `infer_backend` 检查，
+不恢复已移除的后端选择器。回归测试覆盖 LoRA/full 配置、关闭 KT 和缺少可选依赖；
+这些是 CPU 配置测试，不表示 KT 或 ROCm GPU 已实机验证。此前新增的 Python 文件
+补齐 Apache-2.0 许可证头，完整代码、格式、许可证和构建检查保持启用。
+
+GitHub deployment ZIP previews are separate from upstream PyPI/Docker releases.
+The inherited publishers require the upstream repository and reject prereleases.
+Fork CUDA Docker builds still run for pull requests/pushes, without logging in to
+or pushing to the upstream registry. Existing release tags/assets are not replaced.
+
+GitHub 部署 ZIP 预览与上游 PyPI/Docker 发布分开。继承的发布任务只允许上游仓库
+执行且不发布预览版本；本 fork 的 CUDA Docker PR/push 构建仍保留，但不登录或推送
+上游镜像仓库。已有 release 标签和附件不覆盖。

@@ -1,3 +1,17 @@
+# Copyright 2026 the LlamaFactory team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import base64
 import csv
 import hashlib
@@ -62,9 +76,7 @@ def test_existing_windows_triton_must_match_torch():
 
 
 def test_existing_windows_triton_is_selected_without_linux_triton():
-    provider, requirement = windows.select_provider(
-        "cuda", {"triton-windows": "3.7.1.post27"}, "2.13.0+cu128"
-    )
+    provider, requirement = windows.select_provider("cuda", {"triton-windows": "3.7.1.post27"}, "2.13.0+cu128")
     assert provider == "triton-windows"
     assert Requirement(requirement).specifier.contains("3.7.1.post27")
 
@@ -124,7 +136,9 @@ def test_windows_provider_is_protected_by_constraints():
 def test_generic_liger_requirement_cannot_pull_linux_triton_on_windows():
     line = next(
         line
-        for line in (Path(__file__).parents[1] / "requirements/liger-kernel.txt").read_text(encoding="utf-8").splitlines()
+        for line in (Path(__file__).parents[1] / "requirements/liger-kernel.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
         if line and not line.startswith("#")
     )
     requirement = Requirement(line)
