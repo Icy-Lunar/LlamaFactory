@@ -84,7 +84,7 @@ class Engine:
         initial_updates.update(self._update_component(init_dict, lang))
         yield initial_updates
 
-        if self.runner.running and not self.demo_mode:
+        if self.runner.running and self.runner.running_data and not self.demo_mode:
             yield {elem: elem.__class__(value=value) for elem, value in self.runner.running_data.items()}
             yield self._update_component(
                 {

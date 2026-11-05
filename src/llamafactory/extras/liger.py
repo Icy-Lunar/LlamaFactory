@@ -11,6 +11,8 @@ from pathlib import Path
 
 from packaging.version import Version
 
+from .diagnostics import stage
+
 
 # Keep this list aligned with the model patches used by model_utils/liger_kernel.py.
 MODEL_PATCHES = {
@@ -136,6 +138,7 @@ def get_liger_status(dtype: str = "float32") -> LigerStatus:
     except metadata.PackageNotFoundError:
         return LigerStatus(False, "missing", "liger-kernel is not installed")
     timeout = _probe_timeout()
+    stage("liger_probe", timeout=timeout, dtype=dtype)
     try:
         result = subprocess.run(
             [sys.executable, "-X", "utf8", "-m", "llamafactory.extras.liger", "--probe", dtype],
@@ -166,7 +169,21 @@ def get_model_liger_status(model_type: str, dtype: str = "float32") -> LigerStat
     return status
 
 
-def get_local_liger_status(model_path: str | None, compute_type: str = "fp32") -> LigerStatus:
+def get_local_liger_status(model_path: str | None, compute_type: str = "fp32", *, probe: bool = True) -> LigerStatus:
+    if not probe:
+        # Preview/save/start must never compile GPU kernels in the WebUI request.
+        if os.getenv("LLAMAFACTORY_LIGER", "auto").lower() == "off":
+            return LigerStatus(False, "disabled")
+        try:
+            if Version(metadata.version("liger-kernel")) < Version("0.8.0"):
+                return LigerStatus(False, "version")
+            config = json.loads((Path(model_path or "") / "config.json").read_text(encoding="utf-8"))
+            supported = config.get("model_type") in MODEL_PATCHES
+            return LigerStatus(supported, "pending" if supported else "model")
+        except metadata.PackageNotFoundError:
+            return LigerStatus(False, "missing")
+        except (OSError, ValueError, AttributeError):
+            return LigerStatus(False, "model")
     dtype = {"bf16": "bfloat16", "pure_bf16": "bfloat16", "fp16": "float16"}.get(compute_type, "float32")
     status = get_liger_status(dtype)
     if not status.enabled:

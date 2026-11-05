@@ -11,6 +11,12 @@ import time
 from pathlib import Path
 
 
+try:
+    from .session_logging import enable_console_log, run_logged
+except ImportError:
+    from session_logging import enable_console_log, run_logged
+
+
 ROOT = Path(__file__).resolve().parents[1]
 PYTORCH_INDEX = "https://download.pytorch.org/whl/"
 AMD_WINDOWS = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/"
@@ -312,7 +318,7 @@ def run(command: list[str], *, dry_run: bool = False, check: bool = True) -> boo
     print("+ " + subprocess.list2cmdline(command), flush=True)
     if dry_run:
         return True
-    result = subprocess.run(command, cwd=ROOT)
+    result = run_logged(command, ROOT) if os.getenv("LLAMAFACTORY_SESSION_LOG") else subprocess.run(command, cwd=ROOT)
     if check and result.returncode:
         raise RuntimeError(f"Command failed (exit {result.returncode}); see the output above.")
     return result.returncode == 0
@@ -541,8 +547,8 @@ def main(argv=None) -> None:
     webui_host = None
     if not args.no_start and not args.check_only:
         webui_host = resolve_webui_host(args.host_mode, interactive=False if args.dry_run else None)
-    if args.liger == "off":
-        os.environ["LLAMAFACTORY_LIGER"] = "off"
+    os.environ["LLAMAFACTORY_LIGER"] = args.liger
+    os.environ["PYTHONUNBUFFERED"] = "1"
     wsl_rocm = is_wsl() and args.rocm_profile == "aimax395" and args.backend in {"auto", "rocm"}
     if wsl_rocm:
         os.environ.setdefault("HSA_ENABLE_DXG_DETECTION", "1")
@@ -713,6 +719,7 @@ def main(argv=None) -> None:
 
 
 if __name__ == "__main__":
+    enable_console_log()
     try:
         main()
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:

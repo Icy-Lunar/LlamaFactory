@@ -106,6 +106,7 @@ def test_all_fallback_messages_are_localized():
 
     for lang in ("en", "zh", "ru", "ko", "ja"):
         assert set(LIGER_LOCALES[lang]) == {
+            "pending",
             "available",
             "standard",
             "disabled",
@@ -137,8 +138,8 @@ def test_disabled_liger_removes_memory_discount(monkeypatch, tmp_path):
     monkeypatch.setattr(train, "get_device_memory_snapshot", lambda: DeviceMemory(24, 24, 1))
     manager = SimpleNamespace(get_elem_by_id=lambda key: key)
     data = {"top.model_path": str(tmp_path), "top.booster": "liger_kernel"}
-    monkeypatch.setattr(train, "get_local_liger_status", lambda *args: liger.LigerStatus(True, "available"))
+    monkeypatch.setattr(train, "get_local_liger_status", lambda *args, **kwargs: liger.LigerStatus(True, "available"))
     accelerated = train._assess_training_memory(data, manager)[2]
-    monkeypatch.setattr(train, "get_local_liger_status", lambda *args: liger.LigerStatus(False, "runtime"))
+    monkeypatch.setattr(train, "get_local_liger_status", lambda *args, **kwargs: liger.LigerStatus(False, "runtime"))
     standard = train._assess_training_memory(data, manager)[2]
     assert standard > accelerated

@@ -35,6 +35,7 @@ from typing_extensions import override
 
 from ..extras import logging
 from ..extras.constants import TRAINER_LOG, V_HEAD_SAFE_WEIGHTS_NAME, V_HEAD_WEIGHTS_NAME
+from ..extras.diagnostics import stage, training_started
 from ..extras.misc import get_peak_memory, is_env_enabled, is_torch_cuda_available, is_torch_npu_available, use_ray
 from ..extras.packages import is_safetensors_available
 
@@ -241,6 +242,7 @@ class LogCallback(TrainerCallback):
     def on_train_begin(self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs):
         if args.should_save:
             self.do_train = True
+            training_started()
             self._reset(max_steps=state.max_steps)
             self._create_thread_pool(output_dir=args.output_dir)
 
@@ -255,6 +257,11 @@ class LogCallback(TrainerCallback):
             control.should_training_stop = True
 
     @override
+    def on_save(self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs):
+        stage("checkpoint", step=state.global_step)
+        stage("training", step=state.global_step)
+
+    @override
     def on_step_end(self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs):
         if self.aborted:
             control.should_epoch_stop = True
@@ -262,6 +269,8 @@ class LogCallback(TrainerCallback):
 
     @override
     def on_evaluate(self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs):
+        self._diagnostic_evaluating = False
+        stage("training" if self.do_train else "evaluation_done", step=state.global_step)
         if not self.do_train:
             self._close_thread_pool()
 
@@ -275,6 +284,8 @@ class LogCallback(TrainerCallback):
         if not args.should_save:
             return
 
+        if not getattr(self, "_diagnostic_evaluating", False):
+            stage("training", step=state.global_step)
         self._timing(cur_steps=state.global_step)
         logs = dict(
             current_steps=self.cur_steps,
@@ -316,6 +327,9 @@ class LogCallback(TrainerCallback):
         self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs
     ):
         if self.do_train:
+            if not getattr(self, "_diagnostic_evaluating", False):
+                stage("evaluation", step=state.global_step)
+                self._diagnostic_evaluating = True
             return
 
         if self.aborted:

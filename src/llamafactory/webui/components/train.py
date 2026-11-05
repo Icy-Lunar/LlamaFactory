@@ -186,7 +186,7 @@ def _recommend_training_setup(
         "cosine",
         ds_stage,
         False,
-        "liger_kernel" if get_local_liger_status(model_path, compute_type).enabled else "none",
+        "liger_kernel" if get_local_liger_status(model_path, compute_type, probe=False).enabled else "none",
         result_html,
         not inspection_error,
         param_mode,
@@ -387,7 +387,8 @@ def _assess_training_memory(
         booster=(
             "liger_kernel"
             if training_stage in {"pt", "sft"}
-            and get_local_liger_status(get("top.model_path"), get("train.compute_type", "bf16")).enabled
+            and get_local_liger_status(get("top.model_path"), get("train.compute_type", "bf16"), probe=False).reason
+            == "available"
             else "none"
         ),
         gradient_checkpointing=gradient_checkpointing,
@@ -499,7 +500,7 @@ def _build_wizard_summary(
         if quantization_bit == "none"
         else text["quantization"].format(bit=escape(quantization_bit))
     )
-    status = get_local_liger_status(model_path, compute_type)
+    status = get_local_liger_status(model_path, compute_type, probe=False)
     acceleration_text = LIGER_LOCALES.get(lang, LIGER_LOCALES["en"])[status.reason]
     labels = text["labels"]
 
@@ -858,15 +859,15 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
                 wizard_force_cancel_btn = gr.Button(memory_text["cancel_button"])
                 wizard_force_start_btn = gr.Button(memory_text["force_button"], variant="stop", interactive=False)
 
-        with gr.Row():
-            with gr.Column(scale=3):
+        with gr.Row(elem_classes="runtime-layout"):
+            with gr.Column(scale=3, min_width=440):
                 with gr.Row():
                     resume_btn = gr.Checkbox(visible=False, interactive=False)
                     progress_bar = gr.Slider(visible=False, interactive=False)
 
                 with gr.Row():
-                    output_box = gr.Markdown()
-                    tensorboard_link = gr.Markdown(visible=False)
+                    output_box = gr.Markdown(elem_classes="runtime-console")
+                tensorboard_link = gr.Markdown(visible=False, elem_classes="runtime-dashboard")
 
             with gr.Column(scale=1):
                 loss_viewer = gr.Plot(visible=False)
@@ -1304,8 +1305,8 @@ def create_train_tab(engine: "Engine") -> dict[str, "Component"]:
         outputs=[wizard_risk_modal, wizard_force_ack, wizard_force_start_btn],
         queue=False,
     ).then(engine.runner.run_train, input_elems, output_elems)
-    stop_btn.click(engine.runner.set_abort)
-    resume_btn.change(engine.runner.monitor, outputs=output_elems, concurrency_limit=None)
+    stop_btn.click(engine.runner.set_abort, queue=False)
+    resume_btn.change(engine.runner.resume_monitor, outputs=output_elems, concurrency_limit=None)
 
     lang = engine.manager.get_elem_by_id("top.lang")
     model_name: gr.Textbox = engine.manager.get_elem_by_id("top.model_name")

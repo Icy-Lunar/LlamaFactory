@@ -14,6 +14,13 @@
 
 
 def main():
+    import sys
+
+    from .extras.diagnostics import enable_console_log, enable_diagnostics
+
+    if "webui" in sys.argv:
+        enable_console_log()
+    enable_diagnostics()
     from .extras.misc import is_env_enabled
 
     if is_env_enabled("USE_V1"):

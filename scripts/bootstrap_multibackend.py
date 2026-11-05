@@ -11,6 +11,12 @@ import urllib.request
 from pathlib import Path
 
 
+try:
+    from .session_logging import enable_console_log, run_logged
+except ImportError:
+    from session_logging import enable_console_log, run_logged
+
+
 ROOT = Path(__file__).resolve().parents[1]
 BACKENDS = ("auto", "cuda", "xpu", "rocm")
 DRIVER_MODES = ("auto", "install", "skip")
@@ -185,7 +191,7 @@ def run(command: list[str], *, dry_run: bool = False, success_codes: set[int] | 
     print("+ " + subprocess.list2cmdline(command), flush=True)
     if dry_run:
         return 0
-    result = subprocess.run(command, cwd=ROOT)
+    result = run_logged(command, ROOT) if os.getenv("LLAMAFACTORY_SESSION_LOG") else subprocess.run(command, cwd=ROOT)
     accepted = success_codes or {0}
     if result.returncode not in accepted:
         raise RuntimeError(f"Command failed with exit code {result.returncode}; see the output above.")
@@ -360,10 +366,12 @@ def main(argv=None) -> int:
     ):
         if enabled:
             command.append(option)
-    return subprocess.run(command, cwd=ROOT).returncode
+    result = run_logged(command, ROOT) if os.getenv("LLAMAFACTORY_SESSION_LOG") else subprocess.run(command, cwd=ROOT)
+    return result.returncode
 
 
 if __name__ == "__main__":
+    enable_console_log()
     try:
         raise SystemExit(main())
     except (FileNotFoundError, OSError, PermissionError, RuntimeError, ValueError) as error:

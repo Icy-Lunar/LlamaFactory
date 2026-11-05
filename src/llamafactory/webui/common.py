@@ -14,11 +14,10 @@
 
 import json
 import os
-import signal
 from datetime import datetime
 from typing import Any
 
-from psutil import Process
+from psutil import NoSuchProcess, Process, wait_procs
 from yaml import safe_dump, safe_load
 
 from ..extras import logging
@@ -40,22 +39,29 @@ USER_CONFIG = "user_config.yaml"
 
 
 def abort_process(pid: int) -> None:
-    r"""Abort the processes recursively in a bottom-up way."""
+    r"""Stop only this job's process tree, escalating after a bounded grace period."""
     try:
-        children = Process(pid).children()
-        if children:
-            for child in children:
-                abort_process(child.pid)
-
-        os.kill(pid, signal.SIGABRT)
-    except Exception:
-        pass
+        parent = Process(pid)
+        processes = list(reversed(parent.children(recursive=True))) + [parent]
+    except NoSuchProcess:
+        return
+    for process in processes:
+        try:
+            process.terminate()
+        except NoSuchProcess:
+            pass
+    _, alive = wait_procs(processes, timeout=3)
+    for process in alive:
+        try:
+            process.kill()
+        except NoSuchProcess:
+            pass
 
 
 def get_save_dir(*paths: str) -> os.PathLike:
     r"""Get the path to saved model checkpoints."""
     if os.path.sep in paths[-1]:
-        logger.warning_rank0("Found complex path, some features may be not available.")
+        # Absolute/custom local directories are supported, not an error condition.
         return paths[-1]
 
     paths = (path.replace(" ", "").strip() for path in paths)
@@ -136,7 +142,8 @@ def load_args(config_path: str) -> dict[str, Any] | None:
     r"""Load the training configuration from config path."""
     try:
         with open(config_path, encoding="utf-8") as f:
-            return safe_load(f)
+            value = safe_load(f)
+            return value if isinstance(value, dict) else None
     except Exception:
         return None
 

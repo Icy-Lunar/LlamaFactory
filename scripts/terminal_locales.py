@@ -503,6 +503,16 @@ TEXT = {
 }
 
 
+for language, value in {
+    "en": "[heartbeat] {phase} | PID {pid} | elapsed {elapsed}s | process alive; not a progress guarantee",
+    "zh": "[心跳] {phase} | 进程 {pid} | 已用 {elapsed} 秒 | 进程存活，不代表任务正在推进",
+    "ru": "[пульс] {phase} | PID {pid} | прошло {elapsed}с | процесс работает; прогресс не гарантирован",
+    "ko": "[상태] {phase} | PID {pid} | 경과 {elapsed}초 | 프로세스 생존, 진행을 보장하지 않음",
+    "ja": "[状態] {phase} | PID {pid} | 経過 {elapsed}秒 | プロセス稼働中、進捗は未保証",
+}.items():
+    TEXT[language]["heartbeat"] = value
+
+
 def translate(language: str, key: str, **values) -> str:
     template = TEXT.get(language, TEXT["en"]).get(key, TEXT["en"].get(key, key))
     return template.format(**values)

@@ -14,6 +14,7 @@
 
 import json
 import os
+from html import escape
 from typing import Any
 
 from transformers.trainer_utils import get_last_checkpoint
@@ -27,6 +28,7 @@ from ..extras.constants import (
     TRAINER_LOG,
     TRAINING_STAGES,
 )
+from ..extras.diagnostics import tail
 from ..extras.packages import is_gradio_available, is_matplotlib_available
 from ..extras.ploting import gen_loss_plot
 from .common import DEFAULT_CONFIG_DIR, DEFAULT_DATA_DIR, get_save_dir, get_template, load_dataset_info
@@ -100,21 +102,29 @@ def get_trainer_info(lang: str, output_path: os.PathLike) -> tuple[str, "gr.Slid
     running_progress = gr.Slider(visible=False)
     running_info = {}
 
-    running_log_path = os.path.join(output_path, RUNNING_LOG)
+    running_log_path = os.path.join(output_path, "webui_subprocess.log")
+    if not os.path.isfile(running_log_path):
+        running_log_path = os.path.join(output_path, RUNNING_LOG)
     if os.path.isfile(running_log_path):
-        with open(running_log_path, encoding="utf-8") as f:
-            running_log = "```\n" + f.read()[-20000:] + "\n```\n"  # avoid lengthy log
+        running_log = f"<pre>{escape(tail(running_log_path))}</pre>"
 
     trainer_log_path = os.path.join(output_path, TRAINER_LOG)
     if os.path.isfile(trainer_log_path):
         trainer_log: list[dict[str, Any]] = []
-        with open(trainer_log_path, encoding="utf-8") as f:
-            for line in f:
-                trainer_log.append(json.loads(line))
+        for line in tail(trainer_log_path, 256000).splitlines():
+            try:
+                item = json.loads(line)
+                if isinstance(item, dict) and all(
+                    key in item
+                    for key in ("percentage", "current_steps", "total_steps", "elapsed_time", "remaining_time")
+                ):
+                    trainer_log.append(item)
+            except (ValueError, TypeError):
+                continue  # Writer may be midway through appending the last JSON record.
 
         if len(trainer_log) != 0:
             latest_log = trainer_log[-1]
-            percentage = latest_log["percentage"]
+            percentage = min(100, max(0, latest_log["percentage"]))
             label = "Running {:d}/{:d}: {} < {}".format(
                 latest_log["current_steps"],
                 latest_log["total_steps"],
