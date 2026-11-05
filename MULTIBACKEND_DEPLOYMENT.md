@@ -200,3 +200,14 @@ or pushing to the upstream registry. Existing release tags/assets are not replac
 GitHub 部署 ZIP 预览与上游 PyPI/Docker 发布分开。继承的发布任务只允许上游仓库
 执行且不发布预览版本；本 fork 的 CUDA Docker PR/push 构建仍保留，但不登录或推送
 上游镜像仓库。已有 release 标签和附件不覆盖。
+
+Legacy integration tests explicitly prepare local fixtures in `tests/model_fixtures.py`
+before calling the unchanged local-only production loader. Only tiny test repositories
+may fetch weights; multimodal tokenizer tests fetch metadata without model weights.
+The helper is excluded from deployment ZIPs, never patches the loader, and never skips
+a failed fixture download. This does not restore model downloads in the CLI or WebUI.
+
+遗留集成测试通过 `tests/model_fixtures.py` 显式准备本地测试文件，再调用保持不变的
+仅本地加载接口。只允许 tiny 测试仓库获取权重，多模态分词器测试只获取元数据，
+不获取大模型权重。该辅助文件不进入部署 ZIP，不替换正式加载器，也不跳过下载失败；
+CLI 与 WebUI 不恢复模型下载功能。

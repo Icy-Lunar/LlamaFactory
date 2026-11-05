@@ -18,6 +18,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from llamafactory.v1.plugins.model_plugins import peft as peft_module
 from llamafactory.v1.plugins.model_plugins.peft import merge_and_export_model
+from tests.model_fixtures import local_model_path
 
 
 TINY_MODEL = "llamafactory/tiny-random-qwen3"
@@ -138,7 +139,7 @@ def test_merge_and_export_model(tmp_path, adapter_path):
     export_dir = tmp_path / "export"
 
     args_dict = {
-        "model": TINY_MODEL,
+        "model": local_model_path(TINY_MODEL),
         "peft_config": {
             "name": "lora",
             "adapter_name_or_path": adapter_path,

@@ -17,6 +17,7 @@ import os
 import torch
 
 from llamafactory.train.test_utils import load_infer_model, load_train_model
+from tests.model_fixtures import local_model_args
 
 
 TINY_LLAMA3 = os.getenv("TINY_LLAMA3", "llamafactory/tiny-random-Llama-3")
@@ -44,7 +45,7 @@ INFER_ARGS = {
 
 
 def test_freeze_train_all_modules():
-    model = load_train_model(freeze_trainable_layers=1, **TRAIN_ARGS)
+    model = load_train_model(freeze_trainable_layers=1, **local_model_args(TRAIN_ARGS))
     for name, param in model.named_parameters():
         if name.startswith("model.layers.1."):
             assert param.requires_grad is True
@@ -55,7 +56,9 @@ def test_freeze_train_all_modules():
 
 
 def test_freeze_train_extra_modules():
-    model = load_train_model(freeze_trainable_layers=1, freeze_extra_modules="embed_tokens,lm_head", **TRAIN_ARGS)
+    model = load_train_model(
+        freeze_trainable_layers=1, freeze_extra_modules="embed_tokens,lm_head", **local_model_args(TRAIN_ARGS)
+    )
     for name, param in model.named_parameters():
         if name.startswith("model.layers.1.") or any(module in name for module in ["embed_tokens", "lm_head"]):
             assert param.requires_grad is True
@@ -66,7 +69,7 @@ def test_freeze_train_extra_modules():
 
 
 def test_freeze_inference():
-    model = load_infer_model(**INFER_ARGS)
+    model = load_infer_model(**local_model_args(INFER_ARGS))
     for param in model.parameters():
         assert param.requires_grad is False
         assert param.dtype == torch.float16
