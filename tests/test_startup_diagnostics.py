@@ -258,7 +258,8 @@ def test_browser_reconnect_during_startup_does_not_finalize_job(monkeypatch, tmp
     assert sum(event.get("event") == "exit" for event in events) == 1
 
 
-def test_real_cli_loads_local_weights_and_trains_one_cpu_step(tmp_path):
+@pytest.mark.parametrize("config_format", ["yaml", "json"])
+def test_real_cli_loads_local_weights_and_trains_one_cpu_step(tmp_path, config_format):
     """Offline smoke test of real config/data/weight/adapter/trainer transitions, not ROCm certification."""
     from tokenizers import Tokenizer
     from tokenizers.models import WordLevel
@@ -323,7 +324,7 @@ def test_real_cli_loads_local_weights_and_trains_one_cpu_step(tmp_path):
         "disable_tqdm": True,
         "plot_loss": False,
     }
-    config_path = tmp_path / "training.yaml"
+    config_path = tmp_path / f"training.{config_format}"
     config_path.write_text(json.dumps(config))
     env = {
         **os.environ,

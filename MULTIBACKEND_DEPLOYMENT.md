@@ -150,6 +150,8 @@ Import/device/argument stages have a 600-second watchdog; dataset preprocessing,
 weight loading, training and evaluation are not killed merely for taking longer.
 Distributed initialization defaults to 1800 seconds, not years.
 TensorBoard startup failure is logged but does not block the training process.
+Both YAML and UTF-8 JSON training configurations are supported. JSON startup is
+covered by the same real CPU smoke test because the Cyrene training Plugin emits JSON.
 The training child is created **before** TensorBoard; a ready dashboard is not proof
 that weights loaded. The normal SFT order is tokenizer → dataset/preprocessing →
 model configuration/weights → adapters → training. The live stage identifies which
@@ -159,6 +161,8 @@ operation is actually in progress, including work performed before loading weigh
 输出堆栈。导入、设备检查、配置解析超过 600 秒会停止任务并显示诊断；数据预处理、
 权重加载、正常训练及验证不会仅因耗时较长而被终止。分布式初始化默认超时为 1800 秒。
 TensorBoard 启动失败会记录，但不阻止训练启动。
+同时支持 YAML 与 UTF-8 JSON 训练配置；Cyrene 训练插件生成 JSON，因此两种格式均覆盖
+真实小模型 CPU 训练测试，避免把路径对象错误地当成已打开文件读取。
 现在先创建训练子进程，再启动 TensorBoard；看板能打开不代表权重已加载。
 SFT 正常顺序是分词器 → 数据集与预处理 → 模型配置与权重 → 适配器 → 训练。
 实时阶段会显示当前实际执行的操作，包括加载权重前的数据处理。
