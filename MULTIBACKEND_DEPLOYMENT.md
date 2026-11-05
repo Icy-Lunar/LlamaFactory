@@ -110,3 +110,104 @@ Liger 默认采用 `auto`：兼容性检查成功才启用，否则回退标准�
 ```
 
 所有后端都必须通过 `pip check`、设备识别和小张量反向传播后才会启动 WebUI，不会静默回退到 CPU。
+
+## Startup diagnostics / 启动诊断（2026-11-05）
+
+The WebUI no longer runs Liger GPU compilation in form, preview, or memory callbacks.
+It checks local metadata and verifies real kernels in the training child process.
+`--liger required` remains strict: a failed runtime/model check stops training.
+Until verified, the memory estimate uses standard kernels without a Liger discount.
+Existing output folders without a valid `llamaboard_config.yaml` are safe to select;
+they no longer cause `NoneType.items` errors.
+
+WebUI 填表、预览和显存估算不再执行 Liger GPU 编译，只读取本地元数据；真实内核检测
+放入训练子进程。`--liger required` 仍为严格模式，设备或模型不兼容时停止，不静默降级。
+验证前显存按标准内核保守估算。已有输出目录即使没有有效的 WebUI 配置，也不再发生
+`NoneType.items` 错误。此修复不更改 CUDA/XPU 的依赖选择。
+
+ROCm on WSL uses one preprocessing worker, zero DataLoader workers, no pinned
+memory, and one Torch CPU thread to avoid forking inherited HIP/OpenMP state.
+CUDA, XPU, and native ROCm do not receive these WSL-only settings.
+See [PyTorch multiprocessing guidance](https://docs.pytorch.org/docs/2.15/notes/multiprocessing.html).
+This is preventive hardening; without a remote stack trace it is not proof of the reported hang's cause.
+
+ROCm/WSL 采用单进程数据预处理、零 DataLoader 子进程、关闭 pinned memory 和单 Torch CPU
+线程，避免 fork 继承 HIP/OpenMP 状态。CUDA、XPU 和原生 Linux ROCm 不受这些设置影响。
+这是预防性加固；尚无远程堆栈证实该机制就是本次卡住的原因。
+
+| File / 文件 | Contents / 内容 |
+| --- | --- |
+| `logs/session-*.log` | Installer/WebUI Python output and exceptions; 10 MiB rotation, 5 backups / 安装与 WebUI 输出、异常，单文件 10 MiB，保留 5 个轮转备份 |
+| `logs/setup-wizard-*.log` | Timestamped terminal-wizard child output / 终端向导的完整子进程输出与时间戳 |
+| `<output>/webui_subprocess.log` | Unbuffered child stdout/stderr, imports, Liger, weight loading and startup stack dumps / 子进程未缓冲输出、导入、Liger、权重加载、启动堆栈 |
+| `<output>/lifecycle.jsonl` | Stage changes, PID, 15-second monitor heartbeats and exit codes / 阶段、PID、每 15 秒监测心跳和退出码 |
+| `<output>/runtime_state.json` | Current stage and its start timestamp / 当前阶段与起始时间 |
+| `<output>/tensorboard_server.log` | Dashboard startup diagnostics / 看板启动日志 |
+
+The UI refreshes every approximately two seconds and reads bounded log tails.
+Startup emits stack traces every 120 seconds until the training loop begins.
+Import/device/argument stages have a 600-second watchdog; dataset preprocessing,
+weight loading, training and evaluation are not killed merely for taking longer.
+Distributed initialization defaults to 1800 seconds, not years.
+TensorBoard startup failure is logged but does not block the training process.
+Both YAML and UTF-8 JSON training configurations are supported. JSON startup is
+covered by the same real CPU smoke test because the Cyrene training Plugin emits JSON.
+The training child is created **before** TensorBoard; a ready dashboard is not proof
+that weights loaded. The normal SFT order is tokenizer → dataset/preprocessing →
+model configuration/weights → adapters → training. The live stage identifies which
+operation is actually in progress, including work performed before loading weights.
+
+界面约每两秒刷新一次，只读取日志尾部，避免大日志拖慢页面。训练循环开始前每 120 秒
+输出堆栈。导入、设备检查、配置解析超过 600 秒会停止任务并显示诊断；数据预处理、
+权重加载、正常训练及验证不会仅因耗时较长而被终止。分布式初始化默认超时为 1800 秒。
+TensorBoard 启动失败会记录，但不阻止训练启动。
+同时支持 YAML 与 UTF-8 JSON 训练配置；Cyrene 训练插件生成 JSON，因此两种格式均覆盖
+真实小模型 CPU 训练测试，避免把路径对象错误地当成已打开文件读取。
+现在先创建训练子进程，再启动 TensorBoard；看板能打开不代表权重已加载。
+SFT 正常顺序是分词器 → 数据集与预处理 → 模型配置与权重 → 适配器 → 训练。
+实时阶段会显示当前实际执行的操作，包括加载权重前的数据处理。
+
+Heartbeat means "process alive", not "training is advancing". Old per-run logs are
+archived with `.previous` suffixes. Raw training/wizard logs are retained rather than
+truncated: monitor disk usage and archive them after a run. They may include paths or
+dataset excerpts printed by third-party code; review before sharing. UI/session logs
+mask common token/password patterns, but this is not a guarantee of complete sanitization.
+
+心跳仅代表进程存活，不代表训练正在推进。旧任务日志以 `.previous` 后缀保留。
+训练原始日志和向导日志不截断，请关注磁盘空间，训练后自行归档。第三方输出可能包含
+本地路径或数据样例，分享前请检查；界面和会话日志会遮盖常见令牌、密码格式，但不保证
+所有敏感信息均已被识别。真实 ROCm/WSL GPU 验收需要在远程机器重新启动训练后完成。
+
+## CI and release safety follow-up / CI 与发布安全修正
+
+The Hugging Face-only fork removes the obsolete `infer_backend` check from KT
+loading instead of restoring a removed selector. Regression tests cover LoRA/full
+configuration, disabled KT, and a missing optional integration. These are CPU
+configuration tests, not a claim that KT or ROCm GPU execution was verified.
+Previously added Python files now carry the repository's Apache-2.0 headers;
+whole-tree lint, format, license checks and package build remain enabled.
+
+仅保留 Hugging Face 的分支删除了 KT 加载路径中失效的 `infer_backend` 检查，
+不恢复已移除的后端选择器。回归测试覆盖 LoRA/full 配置、关闭 KT 和缺少可选依赖；
+这些是 CPU 配置测试，不表示 KT 或 ROCm GPU 已实机验证。此前新增的 Python 文件
+补齐 Apache-2.0 许可证头，完整代码、格式、许可证和构建检查保持启用。
+
+GitHub deployment ZIP previews are separate from upstream PyPI/Docker releases.
+The inherited publishers require the upstream repository and reject prereleases.
+Fork CUDA Docker builds still run for pull requests/pushes, without logging in to
+or pushing to the upstream registry. Existing release tags/assets are not replaced.
+
+GitHub 部署 ZIP 预览与上游 PyPI/Docker 发布分开。继承的发布任务只允许上游仓库
+执行且不发布预览版本；本 fork 的 CUDA Docker PR/push 构建仍保留，但不登录或推送
+上游镜像仓库。已有 release 标签和附件不覆盖。
+
+Legacy integration tests explicitly prepare local fixtures in `tests/model_fixtures.py`
+before calling the unchanged local-only production loader. Only tiny test repositories
+may fetch weights; multimodal tokenizer tests fetch metadata without model weights.
+The helper is excluded from deployment ZIPs, never patches the loader, and never skips
+a failed fixture download. This does not restore model downloads in the CLI or WebUI.
+
+遗留集成测试通过 `tests/model_fixtures.py` 显式准备本地测试文件，再调用保持不变的
+仅本地加载接口。只允许 tiny 测试仓库获取权重，多模态分词器测试只获取元数据，
+不获取大模型权重。该辅助文件不进入部署 ZIP，不替换正式加载器，也不跳过下载失败；
+CLI 与 WebUI 不恢复模型下载功能。

@@ -17,6 +17,7 @@ import os
 import pytest
 
 from llamafactory.train.tuner import export_model, run_exp
+from tests.model_fixtures import local_model_args
 
 
 DEMO_DATA = os.getenv("DEMO_DATA", "llamafactory/demo_data")
@@ -62,12 +63,12 @@ OS_NAME = os.getenv("OS_NAME", "")
 )
 def test_run_exp(stage: str, dataset: str):
     output_dir = os.path.join("output", f"train_{stage}")
-    run_exp({"stage": stage, "dataset": dataset, "output_dir": output_dir, **TRAIN_ARGS})
+    run_exp({"stage": stage, "dataset": dataset, "output_dir": output_dir, **local_model_args(TRAIN_ARGS)})
     assert os.path.exists(output_dir)
 
 
 @pytest.mark.runs_on(["cpu", "mps"])
 def test_export():
     export_dir = os.path.join("output", "llama3_export")
-    export_model({"export_dir": export_dir, **INFER_ARGS})
+    export_model({"export_dir": export_dir, **local_model_args(INFER_ARGS)})
     assert os.path.exists(export_dir)

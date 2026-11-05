@@ -16,10 +16,11 @@ import torch
 
 from llamafactory.v1.config.model_args import ModelArguments
 from llamafactory.v1.core.model_engine import ModelEngine
+from tests.model_fixtures import local_model_path
 
 
 def test_tiny_qwen():
-    model_args = ModelArguments(model="llamafactory/tiny-random-qwen3")
+    model_args = ModelArguments(model=local_model_path("llamafactory/tiny-random-qwen3"))
     model_engine = ModelEngine(model_args)
     assert "Qwen2Tokenizer" in model_engine.processor.__class__.__name__
     assert "Qwen3Config" in model_engine.model_config.__class__.__name__
@@ -30,7 +31,9 @@ def test_tiny_qwen():
 def test_tiny_qwen_with_kernel_plugin():
     from llamafactory.v1.plugins.model_plugins.kernels.ops.rms_norm.npu_rms_norm import npu_rms_norm_forward
 
-    model_args = ModelArguments(model="llamafactory/tiny-random-qwen3", kernel_config={"name": "auto"})
+    model_args = ModelArguments(
+        model=local_model_path("llamafactory/tiny-random-qwen3"), kernel_config={"name": "auto"}
+    )
     model_engine = ModelEngine(model_args)
     # test enable apply kernel plugin
     if hasattr(torch, "npu"):

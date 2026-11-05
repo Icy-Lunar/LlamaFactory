@@ -1,3 +1,17 @@
+# Copyright 2026 the LlamaFactory team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import json
 import subprocess
 from types import SimpleNamespace
@@ -106,6 +120,7 @@ def test_all_fallback_messages_are_localized():
 
     for lang in ("en", "zh", "ru", "ko", "ja"):
         assert set(LIGER_LOCALES[lang]) == {
+            "pending",
             "available",
             "standard",
             "disabled",
@@ -137,8 +152,8 @@ def test_disabled_liger_removes_memory_discount(monkeypatch, tmp_path):
     monkeypatch.setattr(train, "get_device_memory_snapshot", lambda: DeviceMemory(24, 24, 1))
     manager = SimpleNamespace(get_elem_by_id=lambda key: key)
     data = {"top.model_path": str(tmp_path), "top.booster": "liger_kernel"}
-    monkeypatch.setattr(train, "get_local_liger_status", lambda *args: liger.LigerStatus(True, "available"))
+    monkeypatch.setattr(train, "get_local_liger_status", lambda *args, **kwargs: liger.LigerStatus(True, "available"))
     accelerated = train._assess_training_memory(data, manager)[2]
-    monkeypatch.setattr(train, "get_local_liger_status", lambda *args: liger.LigerStatus(False, "runtime"))
+    monkeypatch.setattr(train, "get_local_liger_status", lambda *args, **kwargs: liger.LigerStatus(False, "runtime"))
     standard = train._assess_training_memory(data, manager)[2]
     assert standard > accelerated

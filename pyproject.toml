@@ -149,6 +149,11 @@ known-third-party = [
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.pytest.ini_options]
+# Installer tests import the source-only scripts namespace. The pytest console
+# entry point with importlib mode does not add the repository root by itself.
+pythonpath = ["."]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

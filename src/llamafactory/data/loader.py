@@ -22,6 +22,7 @@ from datasets import Dataset, DatasetDict, load_dataset, load_from_disk
 
 from ..extras import logging
 from ..extras.constants import FILEEXT2TYPE
+from ..extras.diagnostics import stage as record_stage
 from ..extras.misc import check_version, has_tokenized_data
 from .converter import align_dataset
 from .data_utils import get_dataset_module, merge_dataset, read_cloud_json, split_dataset
@@ -285,6 +286,7 @@ def get_dataset(
     processor: Optional["ProcessorMixin"] = None,
 ) -> "DatasetModule":
     r"""Get the train dataset and optionally gets the evaluation dataset."""
+    record_stage("dataset")
     # tokenized_path 是完整的预处理快照。一旦命中，原始数据集、模板和截断参数都不会再次生效。
     if data_args.tokenized_path is not None:
         if has_tokenized_data(data_args.tokenized_path):
@@ -312,6 +314,7 @@ def get_dataset(
             return_dict=data_args.eval_on_each_dataset,
         )
 
+    record_stage("preprocessing", workers=data_args.preprocessing_num_workers)
     with training_args.main_process_first(desc="pre-process dataset", local=(not data_args.data_shared_file_system)):
         # 先拆分再 tokenize，才能确保从训练集切出的验证集也使用 is_eval=True 的生成/标签规则。
         train_dict, eval_dict = split_dataset(dataset, eval_dataset, data_args, seed=training_args.seed)

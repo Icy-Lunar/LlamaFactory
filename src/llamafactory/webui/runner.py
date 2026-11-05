@@ -23,7 +23,9 @@ import traceback
 import webbrowser
 from collections.abc import Generator
 from copy import deepcopy
+from html import escape
 from subprocess import Popen, TimeoutExpired
+from threading import Lock
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
@@ -31,8 +33,8 @@ from transformers.utils import is_torch_cuda_available, is_torch_npu_available, 
 
 from ..extras.accelerator import configure_xpu_environment
 from ..extras.constants import LLAMABOARD_CONFIG, MULTIMODAL_SUPPORTED_MODELS, PEFT_METHODS, TRAINING_STAGES
+from ..extras.diagnostics import is_rocm_wsl, tail
 from ..extras.liger import get_local_liger_status
-from ..extras.misc import is_accelerator_available, torch_gc
 from ..extras.packages import is_gradio_available
 from .common import (
     DEFAULT_CACHE_DIR,
@@ -47,7 +49,8 @@ from .common import (
     save_cmd,
 )
 from .control import get_trainer_info
-from .locales import ALERTS, LIGER_LOCALES, LOCALES
+from .locales import ALERTS, LOCALES
+from .runtime_locales import RUNTIME_LOCALES
 from .stage_locales import STAGE_VALIDATION_ERRORS
 
 
@@ -71,7 +74,8 @@ def _parse_seed(value: Any, default: int = 42) -> int:
 def _get_acceleration_args(model_path: str | None = None, compute_type: str = "fp32") -> dict[str, bool | str]:
     r"""Return hardware-compatible training acceleration settings."""
     return {
-        "enable_liger_kernel": get_local_liger_status(model_path, compute_type).enabled,
+        "enable_liger_kernel": os.getenv("LLAMAFACTORY_LIGER") == "required"
+        or get_local_liger_status(model_path, compute_type, probe=False).enabled,
         "flash_attn": "auto" if is_torch_cuda_available() or is_torch_npu_available() else "disabled",
     }
 
@@ -148,7 +152,7 @@ def _get_tensorboard_public_url(env: dict[str, str], host: str, port: int, reque
 
 def _configure_accelerator_environment(env: dict[str, str]) -> None:
     r"""Apply backend-specific process settings before the training runtime is imported."""
-    if is_torch_xpu_available():
+    if not is_rocm_wsl() and is_torch_xpu_available():
         configure_xpu_environment(env)
 
 
@@ -167,9 +171,14 @@ class Runner:
         """ State """
         self.aborted = False
         self.running = False
+        self._launch_lock = Lock()
+        self.started_at = 0.0
+        self._heartbeat_at = 0.0
+        self.launch_failure = ""
 
     def set_abort(self) -> None:
         self.aborted = True
+        print("[training] Stop requested by user.", flush=True)
         if self.trainer is not None:
             abort_process(self.trainer.pid)
 
@@ -261,15 +270,6 @@ class Runner:
             if validation_mode == "split" and not 0 < float(optional("train.val_size", 0)) < 100:
                 return errors["split"]
 
-        if not from_preview:
-            status = get_local_liger_status(get("top.model_path"), optional("train.compute_type", "fp32"))
-            if not status.enabled:
-                gr.Info(LIGER_LOCALES.get(lang, LIGER_LOCALES["en"])[status.reason])
-            if is_torch_xpu_available():
-                gr.Info(ALERTS["info_xpu_compat"][lang])
-            elif not is_accelerator_available():
-                gr.Warning(ALERTS["warn_no_cuda"][lang])
-
         return ""
 
     def _finalize(self, lang: str, finish_info: str) -> None:
@@ -280,7 +280,8 @@ class Runner:
         self.aborted = False
         self.running = False
         self.running_data = None
-        torch_gc()
+        # Training owns its GPU context. Do not synchronize a possibly stalled
+        # HIP driver in the Gradio thread when releasing an exited child.
 
     def _parse_train_args(self, data: dict["Component", Any]) -> dict[str, Any]:
         r"""Build and validate the training arguments."""
@@ -334,13 +335,15 @@ class Runner:
             pure_bf16=(get("train.compute_type") == "pure_bf16"),
             plot_loss=True,
             trust_remote_code=True,
-            ddp_timeout=180000000,
+            ddp_timeout=1800,
             include_num_input_tokens_seen=True,
         )
         args.update(acceleration_args)
         args.update(json.loads(get("train.extra_args")))
         # The guided choices are authoritative, including when loading an older saved form.
         args.update(stage=selected_stage, use_unsloth=False, **acceleration_args)
+        if is_rocm_wsl():
+            args.update(preprocessing_num_workers=1, dataloader_num_workers=0, dataloader_pin_memory=False)
         for key in ("quantization_bit", "quantization_method", "double_quantization"):
             args.pop(key, None)
 
@@ -537,71 +540,134 @@ class Runner:
     def _launch(
         self, data: dict["Component", Any], request: Any = None
     ) -> Generator[dict["Component", Any], None, None]:
+        output_box = self.manager.get_elem_by_id("train.output_box")
+        start_btn = self.manager.get_elem_by_id("train.start_btn")
+        stop_btn = self.manager.get_elem_by_id("train.stop_btn")
+        lang = data[self.manager.get_elem_by_id("top.lang")]
+        if not self._launch_lock.acquire(blocking=False):
+            yield {output_box: ALERTS["err_conflict"][lang]}
+            return
+        owns_job = False
+        try:
+            print("[training] Start requested; validating configuration.", flush=True)
+            error = self._initialize(data, from_preview=False)
+            if error:
+                print(f"[training] Launch rejected: {error}", flush=True)
+                yield {output_box: error}
+                return
+            self.running = True
+            owns_job = True
+            self.aborted = False
+            self.launch_failure = ""
+            self.started_at = time.time()
+            self._heartbeat_at = 0.0
+            self.running_data = data
+            print("[training] Start requested; preparing configuration.", flush=True)
+            yield {
+                output_box: RUNTIME_LOCALES.get(lang, RUNTIME_LOCALES["en"])["starting"],
+                start_btn: gr.Button(visible=False),
+                stop_btn: gr.Button(visible=True),
+            }
+            yield from self._launch_impl(data, request)
+        except Exception:
+            error = traceback.format_exc()
+            print(error, file=sys.stderr, flush=True)
+            yield {output_box: f"<pre>{escape(error)}</pre>"}
+        finally:
+            try:
+                if owns_job and self.trainer is not None and self.trainer.poll() is None:
+                    abort_process(self.trainer.pid)
+            finally:
+                if owns_job:
+                    self.trainer = None
+                    self.running = False
+                    self.running_data = None
+                self._launch_lock.release()
+        yield {start_btn: gr.Button(visible=True), stop_btn: gr.Button(visible=False)}
+
+    def _launch_impl(
+        self, data: dict["Component", Any], request: Any = None
+    ) -> Generator[dict["Component", Any], None, None]:
         r"""Start the training process."""
         output_box = self.manager.get_elem_by_id("train.output_box")
-        error = self._initialize(data, from_preview=False)
-        if error:
-            gr.Warning(error)
-            yield {output_box: error}
-        else:
-            self.running_data = data
-            args = self._parse_train_args(data)
-            lang = data[self.manager.get_elem_by_id("top.lang")]
+        self.running_data = data
+        args = self._parse_train_args(data)
+        lang = data[self.manager.get_elem_by_id("top.lang")]
 
-            os.makedirs(args["output_dir"], exist_ok=True)
-            save_args(os.path.join(args["output_dir"], LLAMABOARD_CONFIG), self._build_config_dict(data))
+        os.makedirs(args["output_dir"], exist_ok=True)
+        save_args(os.path.join(args["output_dir"], LLAMABOARD_CONFIG), self._build_config_dict(data))
 
-            env = deepcopy(os.environ)
-            env["LLAMABOARD_ENABLED"] = "1"
-            env["LLAMABOARD_WORKDIR"] = args["output_dir"]
-            _configure_accelerator_environment(env)
-            if args.get("deepspeed", None) is not None:
-                env["FORCE_TORCHRUN"] = "1"
+        env = deepcopy(os.environ)
+        env["LLAMABOARD_ENABLED"] = "1"
+        env["LLAMABOARD_WORKDIR"] = args["output_dir"]
+        env["PYTHONUNBUFFERED"] = "1"
+        env["PYTHONUTF8"] = "1"
+        env["PYTHONFAULTHANDLER"] = "1"
+        if is_rocm_wsl():
+            env.setdefault("TOKENIZERS_PARALLELISM", "false")
+            env.setdefault("OMP_NUM_THREADS", "1")
+            env.setdefault("MKL_NUM_THREADS", "1")
+        _configure_accelerator_environment(env)
+        if args.get("deepspeed", None) is not None:
+            env["FORCE_TORCHRUN"] = "1"
 
-            # NOTE: DO NOT USE shell=True to avoid security risk
-            webui_log_path = os.path.join(args["output_dir"], "webui_subprocess.log")
-            config_path = save_cmd(args)
-            tensorboard_url = None
-            tensorboard_log_dir = None
-            try:
-                if args.get("report_to") == "tensorboard":
-                    tensorboard_url, tensorboard_log_dir = self._start_tensorboard(args["output_dir"], env, request)
-
-                with open(webui_log_path, "a", encoding="utf-8") as webui_log:
-                    self.trainer = Popen(
-                        _get_train_command(config_path),
-                        env=env,
-                        stdout=webui_log,
-                        stderr=webui_log,
-                        text=True,
-                    )
-            except (OSError, RuntimeError, TimeoutError):
-                error_stack = traceback.format_exc()
-                self._stop_tensorboard()
-                with open(webui_log_path, "a", encoding="utf-8") as webui_log:
-                    webui_log.write(error_stack)
-
-                failure_message = ALERTS["err_launch"][lang].format(log_path=webui_log_path)
-                failure_details = f"{failure_message}\n\n```text\n{error_stack}\n```"
-                self._finalize(lang, failure_message)
-                gr.Warning(failure_message)
-                yield {output_box: failure_details}
+        # NOTE: DO NOT USE shell=True to avoid security risk
+        webui_log_path = os.path.join(args["output_dir"], "webui_subprocess.log")
+        config_path = save_cmd(args)
+        # Preserve previous diagnostics, but never show yesterday's state as this run.
+        for name in ("webui_subprocess.log", "runtime_state.json", "lifecycle.jsonl"):
+            path = os.path.join(args["output_dir"], name)
+            if os.path.exists(path):
+                os.replace(path, path + f".{time.time_ns()}.previous")
+        tensorboard_url = None
+        tensorboard_log_dir = None
+        try:
+            if self.aborted:
                 return
+            with open(webui_log_path, "a", encoding="utf-8") as webui_log:
+                webui_log.write(f"[launch] {time.strftime('%Y-%m-%d %H:%M:%S')} config={config_path}\n")
+                webui_log.flush()
+                self.trainer = Popen(
+                    _get_train_command(config_path),
+                    env=env,
+                    stdout=webui_log,
+                    stderr=webui_log,
+                    text=True,
+                )
+            if args.get("report_to") == "tensorboard" and not self.aborted:
+                try:
+                    tensorboard_url, tensorboard_log_dir = self._start_tensorboard(args["output_dir"], env, request)
+                except (OSError, RuntimeError, TimeoutError):
+                    # An optional dashboard must never prevent the training process starting.
+                    with open(webui_log_path, "a", encoding="utf-8") as webui_log:
+                        webui_log.write("[tensorboard] " + traceback.format_exc())
+        except (OSError, RuntimeError, TimeoutError):
+            error_stack = traceback.format_exc()
+            self._stop_tensorboard()
+            with open(webui_log_path, "a", encoding="utf-8") as webui_log:
+                webui_log.write(error_stack)
 
-            if tensorboard_url is not None and tensorboard_log_dir is not None:
-                tensorboard_link = self.manager.get_elem_by_id("train.tensorboard_link")
-                tensorboard_message = ALERTS["info_tensorboard_started"][lang].format(url=tensorboard_url)
-                gr.Info(tensorboard_message)
-                yield {
-                    tensorboard_link: gr.Markdown(
-                        value=ALERTS["info_tensorboard_link"][lang].format(
-                            url=tensorboard_url, log_dir=tensorboard_log_dir
-                        ),
-                        visible=True,
-                    )
-                }
+            failure_message = ALERTS["err_launch"][lang].format(log_path=webui_log_path)
+            failure_details = f"{failure_message}\n\n```text\n{error_stack}\n```"
+            self._finalize(lang, failure_message)
+            gr.Warning(failure_message)
+            yield {output_box: failure_details}
+            return
 
-            yield from self.monitor()
+        if tensorboard_url is not None and tensorboard_log_dir is not None:
+            tensorboard_link = self.manager.get_elem_by_id("train.tensorboard_link")
+            tensorboard_message = ALERTS["info_tensorboard_started"][lang].format(url=tensorboard_url)
+            gr.Info(tensorboard_message)
+            yield {
+                tensorboard_link: gr.Markdown(
+                    value=ALERTS["info_tensorboard_link"][lang].format(
+                        url=tensorboard_url, log_dir=tensorboard_log_dir
+                    ),
+                    visible=True,
+                )
+            }
+
+        yield from self.monitor()
 
     def _build_config_dict(self, data: dict["Component", Any]) -> dict[str, Any]:
         r"""Build a dictionary containing the current training configuration."""
@@ -620,12 +686,17 @@ class Runner:
     def run_train(self, data, request: gr.Request):
         yield from self._launch(data, request)
 
-    def monitor(self):
-        r"""Monitorgit the training progress and logs."""
-        self.aborted = False
-        self.running = True
+    def resume_monitor(self):
+        # Reconnecting browsers observe a job; only its launch callback owns cleanup.
+        yield from self.monitor(observe_only=True)
 
-        get = lambda elem_id: self.running_data[self.manager.get_elem_by_id(elem_id)]
+    def monitor(self, observe_only: bool = False):
+        r"""Monitor process liveness separately from actual training progress."""
+        data = self.running_data
+        if not data:
+            return
+
+        get = lambda elem_id: data[self.manager.get_elem_by_id(elem_id)]
         lang, model_name, finetuning_type = get("top.lang"), get("top.model_name"), get("top.finetuning_type")
         output_dir = get("train.output_dir")
         output_path = get_save_dir(model_name, finetuning_type, output_dir)
@@ -637,9 +708,17 @@ class Runner:
         start_btn = self.manager.get_elem_by_id("train.start_btn")
         stop_btn = self.manager.get_elem_by_id("train.stop_btn")
 
+        while self.trainer is None and self.running:
+            yield {output_box: RUNTIME_LOCALES.get(lang, RUNTIME_LOCALES["en"])["starting"]}
+            time.sleep(0.25)
+        trainer = self.trainer
+        if trainer is None:
+            yield {start_btn: gr.Button(visible=True), stop_btn: gr.Button(visible=False)}
+            return
+
         running_log = ""
-        return_code = -1
-        while return_code == -1:
+        return_code = None
+        while return_code is None:
             if self.aborted:
                 yield {
                     output_box: ALERTS["info_aborting"][lang],
@@ -647,6 +726,48 @@ class Runner:
                 }
             else:
                 running_log, running_progress, running_info = get_trainer_info(lang, output_path)
+                state = {}
+                try:
+                    with open(os.path.join(output_path, "runtime_state.json"), encoding="utf-8") as stream:
+                        state = json.load(stream)
+                except (OSError, ValueError):
+                    pass
+                now = time.time()
+                if not isinstance(state, dict):
+                    state = {}
+                stage_name = state.get("stage", "runtime_import")
+                if stage_name not in {"training", "evaluation", "checkpoint", "evaluation_done"}:
+                    running_progress = gr.Slider(visible=False)
+                stage_age = max(0, now - state.get("time", self.started_at or now))
+                text = RUNTIME_LOCALES.get(lang, RUNTIME_LOCALES["en"])
+                label = text.get(stage_name, stage_name)
+                status = text["status"].format(
+                    stage=label, pid=trainer.pid, elapsed=int(now - (self.started_at or now)), age=int(stage_age)
+                )
+                if stage_age > 120:
+                    status += "\n\n" + text["waiting"]
+                running_log = status + "\n\n" + running_log
+                if not observe_only and now - self._heartbeat_at >= 15:
+                    self._heartbeat_at = now
+                    record = {
+                        "time": now,
+                        "event": "heartbeat",
+                        "stage": stage_name,
+                        "pid": trainer.pid,
+                        "stage_seconds": int(stage_age),
+                    }
+                    with open(os.path.join(output_path, "lifecycle.jsonl"), "a", encoding="utf-8") as stream:
+                        stream.write(json.dumps(record) + "\n")
+                    print("[training] " + json.dumps(record), flush=True)
+                if (
+                    not observe_only
+                    and stage_name in {"runtime_import", "device_check", "arguments"}
+                    and stage_age > 600
+                ):
+                    self.launch_failure = text["timeout"]
+                    with open(os.path.join(output_path, "webui_subprocess.log"), "a", encoding="utf-8") as stream:
+                        stream.write("\n[watchdog] Startup exceeded 600s; terminating the training process tree.\n")
+                    abort_process(trainer.pid)
                 return_dict = {
                     output_box: running_log,
                     progress_bar: running_progress,
@@ -662,11 +783,20 @@ class Runner:
                 yield return_dict
 
             try:
-                stderr = self.trainer.communicate(timeout=2)[1]
-                return_code = self.trainer.returncode
+                stderr = trainer.communicate(timeout=2)[1]
+                return_code = trainer.returncode
             except TimeoutExpired:
                 continue
 
+        running_log = get_trainer_info(lang, output_path)[0]
+        if not observe_only:
+            with open(os.path.join(output_path, "lifecycle.jsonl"), "a", encoding="utf-8") as stream:
+                stream.write(
+                    json.dumps(
+                        {"time": time.time(), "event": "exit", "return_code": return_code, "aborted": self.aborted}
+                    )
+                    + "\n"
+                )
         if return_code == 0 or self.aborted:
             finish_info = ALERTS["info_finished"][lang]
             finish_log = ALERTS["info_finished"][lang] + "\n\n" + running_log
@@ -674,18 +804,17 @@ class Runner:
             if stderr is None:
                 webui_log_path = os.path.join(output_path, "webui_subprocess.log")
                 if os.path.exists(webui_log_path):
-                    with open(webui_log_path, "rb") as f:
-                        f.seek(0, os.SEEK_END)
-                        f.seek(max(f.tell() - 20000, 0))
-                        stderr = f.read().decode("utf-8", errors="replace")
+                    stderr = tail(webui_log_path)
                 else:
                     stderr = "No subprocess log file found."
 
             print(stderr)
             finish_info = ALERTS["err_failed"][lang]
-            finish_log = ALERTS["err_failed"][lang] + f" Exit code: {return_code}\n\n```\n{stderr}\n```\n"
+            finish_log = ALERTS["err_failed"][lang] + f" Exit code: {return_code}\n\n{self.launch_failure}"
+            finish_log += f"\n\n<pre>{escape(str(stderr))}</pre>"
 
-        self._finalize(lang, finish_info)
+        if not observe_only:
+            self._finalize(lang, finish_info)
         return_dict = {
             output_box: finish_log,
             progress_bar: gr.Slider(visible=False),
@@ -735,7 +864,7 @@ class Runner:
 
             output_dir = get_save_dir(model_name, finetuning_type, output_dir)
             config_dict = load_args(os.path.join(output_dir, LLAMABOARD_CONFIG))  # load llamaboard config
-            for elem_id, value in config_dict.items():
+            for elem_id, value in (config_dict or {}).items():
                 if self.manager.has_elem(elem_id):
                     output_dict[self.manager.get_elem_by_id(elem_id)] = value
 

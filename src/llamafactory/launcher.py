@@ -59,6 +59,11 @@ def launch():
     if command == "train" and (
         is_env_enabled("FORCE_TORCHRUN") or (get_device_count() > 1 and not use_ray() and not use_kt())
     ):
+        if is_env_enabled("LLAMABOARD_ENABLED"):
+            import faulthandler
+
+            # Workers install their own watchdog. The supervisor only waits for them.
+            faulthandler.cancel_dump_traceback_later()
         # launch distributed training
         nnodes = os.getenv("NNODES", "1")
         node_rank = os.getenv("NODE_RANK", "0")
@@ -161,6 +166,9 @@ def launch():
 
 
 if __name__ == "__main__":
+    from llamafactory.extras.diagnostics import enable_diagnostics
+
+    enable_diagnostics()
     from llamafactory.train.tuner import run_exp  # use absolute import
 
     run_exp()

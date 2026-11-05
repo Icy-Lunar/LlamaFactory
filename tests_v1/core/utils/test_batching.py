@@ -23,6 +23,7 @@ from llamafactory.v1.plugins.trainer_plugins.batching import (
 )
 from llamafactory.v1.utils.constants import IGNORE_INDEX
 from llamafactory.v1.utils.objects import StatefulBuffer
+from tests.model_fixtures import local_model_path
 
 
 def _make_model_input(length: int, start: int = 0):
@@ -182,7 +183,7 @@ def test_dynamic_batching_fill_buffer_restarts_until_micro_batch_is_complete():
 def test_normal_batching():
     data_args = DataArguments(train_dataset="llamafactory/v1-sft-demo")
     data_engine = DataEngine(data_args.train_dataset)
-    model_args = ModelArguments(model="llamafactory/tiny-random-qwen3")
+    model_args = ModelArguments(model=local_model_path("llamafactory/tiny-random-qwen3"))
     model_engine = ModelEngine(model_args=model_args)
     training_args = TrainingArguments(
         micro_batch_size=4,

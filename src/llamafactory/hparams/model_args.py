@@ -635,9 +635,7 @@ class KTransformersArguments:
             if self._kt_inference_config is not None:
                 raise ValueError("`kt_config` requires `use_kt: true`.")
             return
-        if self.infer_backend != EngineName.HF:
-            raise ValueError("KTransformers inference requires `infer_backend: huggingface`.")
-
+        # Hugging Face is the only inference engine; there is no backend selector.
         adapter_dir = self._resolve_kt_adapter_artifact_dir("inference")
 
         try:

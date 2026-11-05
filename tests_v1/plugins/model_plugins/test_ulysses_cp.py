@@ -27,6 +27,7 @@ from llamafactory.v1.plugins.model_plugins.parallelization.sequence_parallel imp
 )
 from llamafactory.v1.utils.env import find_available_port
 from llamafactory.v1.utils.pytest import dist_env
+from tests.model_fixtures import local_model_path
 
 
 def test_qwen3_5_broadcast_position_ids_keep_packed_boundaries(monkeypatch: pytest.MonkeyPatch):
@@ -66,7 +67,7 @@ def _test_sequence_parallel_loss(
     local_rank: int, world_size: int, master_port: int, cp_size: int, dp_size: int, batch_size: int
 ):
     with dist_env(local_rank, world_size, master_port):
-        model_args = ModelArguments(model="llamafactory/tiny-random-qwen3")
+        model_args = ModelArguments(model=local_model_path("llamafactory/tiny-random-qwen3"))
 
         training_args = TrainingArguments(cp_mode="ulysses", cp_size=cp_size, dp_size=dp_size)
         DistributedInterface(training_args)

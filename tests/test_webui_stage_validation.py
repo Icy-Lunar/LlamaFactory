@@ -1,3 +1,17 @@
+# Copyright 2026 the LlamaFactory team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import json
 
 import pytest
@@ -104,6 +118,22 @@ def test_tensorboard_is_the_default_training_logger(form):
     assert args["report_to"] == "tensorboard"
     assert args["logging_dir"] == args["output_dir"]
     assert engine.manager.get_elem_by_id("train.tensorboard_link") in launch.outputs
+
+
+@pytest.mark.parametrize("rocm_wsl", [True, False])
+def test_wsl_worker_safety_does_not_change_other_backends(form, monkeypatch, rocm_wsl):
+    monkeypatch.setattr("llamafactory.webui.runner.is_rocm_wsl", lambda: rocm_wsl)
+    engine, _, _ = form
+    data = _with(
+        form,
+        train__extra_args=json.dumps(
+            {"preprocessing_num_workers": 8, "dataloader_num_workers": 4, "dataloader_pin_memory": True}
+        ),
+    )
+    args = engine.runner._parse_train_args(data)
+    assert args["preprocessing_num_workers"] == (1 if rocm_wsl else 8)
+    assert args["dataloader_num_workers"] == (0 if rocm_wsl else 4)
+    assert args["dataloader_pin_memory"] is (not rocm_wsl)
 
 
 @pytest.mark.parametrize("mode", ["none", "split", "separate"])

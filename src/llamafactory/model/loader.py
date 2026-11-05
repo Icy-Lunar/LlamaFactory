@@ -30,6 +30,7 @@ from transformers import (
 from trl import AutoModelForCausalLMWithValueHead
 
 from ..extras import logging
+from ..extras.diagnostics import stage
 from ..extras.misc import count_parameters, skip_check_imports
 from ..extras.packages import is_torch_version_greater_than
 from .adapter import init_adapter
@@ -77,6 +78,7 @@ def load_tokenizer(model_args: "ModelArguments") -> "TokenizerModule":
 
     Note: including inplace operation of model_args.
     """
+    stage("tokenizer")
     init_kwargs = _get_init_kwargs(model_args)
     try:
         tokenizer = AutoTokenizer.from_pretrained(
@@ -142,10 +144,12 @@ def load_model(
     r"""Load pretrained model."""
     # Configuration patches determine quantization, attention, and device loading before model creation.
     init_kwargs = _get_init_kwargs(model_args)
+    stage("model_config")
     config = load_config(model_args)
     patch_config(config, tokenizer, model_args, init_kwargs, is_trainable)
     apply_liger_kernel(config, model_args, is_trainable, require_logits=(finetuning_args.stage not in ["pt", "sft"]))
 
+    stage("weights")
     model = None
     if model_args.use_unsloth:
         if model_args.adapter_name_or_path is not None:
@@ -184,6 +188,7 @@ def load_model(
     patch_model(model, tokenizer, model_args, is_trainable, add_valuehead)
     register_autoclass(config, model, tokenizer)
 
+    stage("adapters")
     model = init_adapter(config, model, model_args, finetuning_args, is_trainable)
 
     if add_valuehead:
@@ -251,4 +256,5 @@ def load_model(
         for name, param in model.named_parameters():
             print(f"name: {name}, dtype: {param.dtype}, device: {param.device}, trainable: {param.requires_grad}")
 
+    stage("model_ready")
     return model

@@ -17,6 +17,7 @@ import os
 import pytest
 
 from llamafactory.chat import ChatModel
+from tests.model_fixtures import local_model_args
 
 
 TINY_LLAMA3 = os.getenv("TINY_LLAMA3", "llamafactory/tiny-random-Llama-3")
@@ -39,13 +40,13 @@ EXPECTED_RESPONSE = "_rho"
 
 @pytest.mark.runs_on(["cpu", "mps"])
 def test_chat():
-    chat_model = ChatModel(INFER_ARGS)
+    chat_model = ChatModel(local_model_args(INFER_ARGS))
     assert chat_model.chat(MESSAGES)[0].response_text == EXPECTED_RESPONSE
 
 
 @pytest.mark.runs_on(["cpu", "mps"])
 def test_stream_chat():
-    chat_model = ChatModel(INFER_ARGS)
+    chat_model = ChatModel(local_model_args(INFER_ARGS))
     response = ""
     for token in chat_model.stream_chat(MESSAGES):
         response += token

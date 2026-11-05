@@ -32,9 +32,9 @@ if TYPE_CHECKING:
 
 def update_booster(lang: str, model_path: str | None, compute_type: str = "bf16"):
     text = LIGER_LOCALES.get(lang, LIGER_LOCALES["en"])
-    status = get_local_liger_status(model_path, compute_type)
+    status = get_local_liger_status(model_path, compute_type, probe=False)
     return gr.Dropdown(
-        choices=[(text["available"], "liger_kernel"), (text["standard"], "none")],
+        choices=[(text["pending"], "liger_kernel"), (text["standard"], "none")],
         value="liger_kernel" if status.enabled else "none",
         interactive=False,
     )

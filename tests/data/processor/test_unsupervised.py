@@ -21,6 +21,7 @@ from transformers import AutoTokenizer
 
 from llamafactory.extras.packages import is_transformers_version_greater_than
 from llamafactory.train.test_utils import load_dataset_module
+from tests.model_fixtures import local_model_args
 
 
 DEMO_DATA = os.getenv("DEMO_DATA", "llamafactory/demo_data")
@@ -50,7 +51,7 @@ TRAIN_ARGS = {
 @pytest.mark.runs_on(["cpu", "mps"])
 @pytest.mark.parametrize("num_samples", [16])
 def test_unsupervised_data(num_samples: int):
-    train_dataset = load_dataset_module(**TRAIN_ARGS)["train_dataset"]
+    train_dataset = load_dataset_module(**local_model_args(TRAIN_ARGS))["train_dataset"]
     ref_tokenizer = AutoTokenizer.from_pretrained(TINY_LLAMA3)
     original_data = load_dataset(DEMO_DATA, name="system_chat", split="train")
     indexes = random.choices(range(len(original_data)), k=num_samples)

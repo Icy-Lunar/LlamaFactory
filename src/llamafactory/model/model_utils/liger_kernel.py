@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import inspect
+import os
 from typing import TYPE_CHECKING
 
 from ...extras import logging
@@ -42,6 +43,8 @@ def apply_liger_kernel(
     dtype = str(model_args.compute_dtype).removeprefix("torch.") if model_args.compute_dtype else "float32"
     status = get_model_liger_status(model_type, dtype)
     if not status.enabled:
+        if os.getenv("LLAMAFACTORY_LIGER") == "required":
+            raise RuntimeError(f"Required Liger kernel is unavailable ({status.reason}): {status.detail}")
         model_args.enable_liger_kernel = False
         logger.warning_rank0(f"Liger Kernel disabled ({status.reason}): {status.detail}")
         return

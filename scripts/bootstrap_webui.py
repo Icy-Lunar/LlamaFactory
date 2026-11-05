@@ -1,3 +1,17 @@
+# Copyright 2026 the LlamaFactory team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Install dependencies for the detected accelerator, verify them, and start WebUI."""
 
 import argparse
@@ -9,6 +23,12 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+
+try:
+    from .session_logging import enable_console_log, run_logged
+except ImportError:
+    from session_logging import enable_console_log, run_logged
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -312,7 +332,7 @@ def run(command: list[str], *, dry_run: bool = False, check: bool = True) -> boo
     print("+ " + subprocess.list2cmdline(command), flush=True)
     if dry_run:
         return True
-    result = subprocess.run(command, cwd=ROOT)
+    result = run_logged(command, ROOT) if os.getenv("LLAMAFACTORY_SESSION_LOG") else subprocess.run(command, cwd=ROOT)
     if check and result.returncode:
         raise RuntimeError(f"Command failed (exit {result.returncode}); see the output above.")
     return result.returncode == 0
@@ -541,8 +561,8 @@ def main(argv=None) -> None:
     webui_host = None
     if not args.no_start and not args.check_only:
         webui_host = resolve_webui_host(args.host_mode, interactive=False if args.dry_run else None)
-    if args.liger == "off":
-        os.environ["LLAMAFACTORY_LIGER"] = "off"
+    os.environ["LLAMAFACTORY_LIGER"] = args.liger
+    os.environ["PYTHONUNBUFFERED"] = "1"
     wsl_rocm = is_wsl() and args.rocm_profile == "aimax395" and args.backend in {"auto", "rocm"}
     if wsl_rocm:
         os.environ.setdefault("HSA_ENABLE_DXG_DETECTION", "1")
@@ -713,6 +733,7 @@ def main(argv=None) -> None:
 
 
 if __name__ == "__main__":
+    enable_console_log()
     try:
         main()
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:

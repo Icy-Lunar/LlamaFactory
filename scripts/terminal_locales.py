@@ -1,3 +1,17 @@
+# Copyright 2026 the LlamaFactory team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Localized resources for the dependency-free terminal setup wizard."""
 
 LANGUAGE_CHOICES = (
@@ -501,6 +515,16 @@ TEXT = {
         "fallback_success": "互換 GPU 学習を開始し、利用不能な機能を無効化しました。",
     },
 }
+
+
+for language, value in {
+    "en": "[heartbeat] {phase} | PID {pid} | elapsed {elapsed}s | process alive; not a progress guarantee",
+    "zh": "[心跳] {phase} | 进程 {pid} | 已用 {elapsed} 秒 | 进程存活，不代表任务正在推进",
+    "ru": "[пульс] {phase} | PID {pid} | прошло {elapsed}с | процесс работает; прогресс не гарантирован",
+    "ko": "[상태] {phase} | PID {pid} | 경과 {elapsed}초 | 프로세스 생존, 진행을 보장하지 않음",
+    "ja": "[状態] {phase} | PID {pid} | 経過 {elapsed}秒 | プロセス稼働中、進捗は未保証",
+}.items():
+    TEXT[language]["heartbeat"] = value
 
 
 def translate(language: str, key: str, **values) -> str:

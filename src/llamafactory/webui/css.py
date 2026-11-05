@@ -1129,6 +1129,21 @@ CSS = r"""
   .oobe-step-label { white-space: normal; }
 }
 
+.runtime-layout { gap: 20px !important; align-items: flex-start !important; }
+.runtime-console { border: 1px solid var(--border-color-primary) !important; border-radius: 14px !important; }
+.runtime-console h3 { margin: 0 0 8px !important; }
+.runtime-console pre {
+  background: #101c2e !important; color: #dbeafe !important;
+  border: 1px solid #29405f !important; border-radius: 12px !important;
+  min-height: 260px; max-height: 520px; overflow: auto !important;
+  padding: 16px !important; font: 13px/1.65 ui-monospace, Consolas, monospace !important;
+  white-space: pre-wrap !important; overflow-wrap: anywhere;
+}
+.runtime-dashboard { padding: 12px !important; border-radius: 12px !important; }
+@media (max-width: 760px) {
+  .runtime-layout > div { min-width: 0 !important; flex-basis: 100% !important; }
+  .runtime-console pre { max-height: 380px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .gradio-container *, .gradio-container *::after { transition: none !important; }
 }

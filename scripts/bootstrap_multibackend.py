@@ -1,3 +1,17 @@
+# Copyright 2026 the LlamaFactory team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Select CUDA, XPU, or ROCm, prepare the system driver, and launch the matching isolated environment."""
 
 import argparse
@@ -9,6 +23,12 @@ import sys
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+
+try:
+    from .session_logging import enable_console_log, run_logged
+except ImportError:
+    from session_logging import enable_console_log, run_logged
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -185,7 +205,7 @@ def run(command: list[str], *, dry_run: bool = False, success_codes: set[int] | 
     print("+ " + subprocess.list2cmdline(command), flush=True)
     if dry_run:
         return 0
-    result = subprocess.run(command, cwd=ROOT)
+    result = run_logged(command, ROOT) if os.getenv("LLAMAFACTORY_SESSION_LOG") else subprocess.run(command, cwd=ROOT)
     accepted = success_codes or {0}
     if result.returncode not in accepted:
         raise RuntimeError(f"Command failed with exit code {result.returncode}; see the output above.")
@@ -360,10 +380,12 @@ def main(argv=None) -> int:
     ):
         if enabled:
             command.append(option)
-    return subprocess.run(command, cwd=ROOT).returncode
+    result = run_logged(command, ROOT) if os.getenv("LLAMAFACTORY_SESSION_LOG") else subprocess.run(command, cwd=ROOT)
+    return result.returncode
 
 
 if __name__ == "__main__":
+    enable_console_log()
     try:
         raise SystemExit(main())
     except (FileNotFoundError, OSError, PermissionError, RuntimeError, ValueError) as error:

@@ -25,6 +25,7 @@ from llamafactory.data.mm_plugin import get_mm_plugin
 from llamafactory.extras.packages import is_pyav_available, is_transformers_version_greater_than
 from llamafactory.hparams import get_infer_args
 from llamafactory.model import load_tokenizer
+from tests.model_fixtures import local_model_path
 
 
 if TYPE_CHECKING:
@@ -129,7 +130,9 @@ def _is_close(batch_a: dict[str, Any], batch_b: dict[str, Any]) -> None:
 
 
 def _load_tokenizer_module(model_name_or_path: str) -> "TokenizerModule":
-    model_args, *_ = get_infer_args({"model_name_or_path": model_name_or_path, "template": "default"})
+    model_args, *_ = get_infer_args(
+        {"model_name_or_path": local_model_path(model_name_or_path, weights=False), "template": "default"}
+    )
     return load_tokenizer(model_args)
 
 

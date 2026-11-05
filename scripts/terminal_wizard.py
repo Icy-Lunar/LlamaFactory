@@ -1,3 +1,17 @@
+# Copyright 2026 the LlamaFactory team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Dependency-free, localized terminal wizard for multi-backend setup."""
 
 from __future__ import annotations
@@ -9,7 +23,9 @@ import platform
 import shutil
 import subprocess
 import sys
+import time
 import unicodedata
+from collections import deque
 from dataclasses import dataclass, replace
 from datetime import datetime
 
@@ -24,6 +40,7 @@ try:
         select_environment_directory,
         select_rocm_profile,
     )
+    from .session_logging import live_output
     from .terminal_locales import LANGUAGE_CHOICES, translate
 except ImportError:
     from bootstrap_multibackend import (  # type: ignore[no-redef]
@@ -35,6 +52,7 @@ except ImportError:
         select_environment_directory,
         select_rocm_profile,
     )
+    from session_logging import live_output  # type: ignore[no-redef]
     from terminal_locales import LANGUAGE_CHOICES, translate  # type: ignore[no-redef]
 
 
@@ -163,11 +181,15 @@ class ProgressView:
         self.screen = screen
         self.language = language
         self.seen: set[str] = set()
+        self.current_phase = "phase_environment"
 
     def show_phase(self, key: str) -> None:
+        self.current_phase = key
         if key not in self.seen:
             self.seen.add(key)
-            self.screen.block(translate(self.language, key), [translate(self.language, key + "_detail")], tone="accent")
+            self.screen.block(
+                translate(self.language, key), [translate(self.language, key + "_detail")], tone="accent"
+            )
 
     def consume(self, line: str) -> None:
         stripped = line.strip()
@@ -180,7 +202,10 @@ class ProgressView:
             self.show_phase("phase_ready")
             self.screen.log_line(stripped)
             return
-        if not stripped or stripped.startswith(("File \"", "~", "^")) or lowered.startswith("traceback"):
+        if not stripped:
+            return
+        if "phase_ready" in self.seen or stripped.startswith("[stage]") or lowered.startswith("traceback"):
+            self.screen.log_line(stripped)
             return
         if any(marker in lowered for marker in ("error", "failed", "warning", "unavailable", "winerror")):
             self.screen.log_line(stripped)
@@ -426,7 +451,8 @@ def execute(screen: Screen, config: WizardConfig, command: list[str]) -> Executi
         [f"{translate(config.language, 'log')}: {log_path}"],
         tone="accent",
     )
-    output_lines = []
+    output_lines = deque(maxlen=2000)
+    started = time.monotonic()
     progress = ProgressView(screen, config.language)
     with log_path.open("w", encoding="utf-8", newline="\n") as log:
         log.write(subprocess.list2cmdline(command) + "\n\n")
@@ -439,14 +465,29 @@ def execute(screen: Screen, config: WizardConfig, command: list[str]) -> Executi
             encoding="utf-8",
             errors="replace",
             bufsize=1,
+            env={**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1"},
         )
         try:
             assert process.stdout is not None
-            for line in process.stdout:
+            for line in live_output(process):
+                heartbeat = not line
+                if not line:
+                    line = (
+                        translate(
+                            config.language,
+                            "heartbeat",
+                            pid=process.pid,
+                            elapsed=int(time.monotonic() - started),
+                            phase=translate(config.language, progress.current_phase),
+                        )
+                        + "\n"
+                    )
+                    screen.log_line(line.rstrip())
                 output_lines.append(line)
-                log.write(line)
+                log.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {line}")
                 log.flush()
-                progress.consume(line)
+                if not heartbeat:
+                    progress.consume(line)
             return ExecutionResult(process.wait(), "".join(output_lines), str(log_path))
         except KeyboardInterrupt:
             process.terminate()
