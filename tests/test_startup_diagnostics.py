@@ -53,6 +53,65 @@ def test_rocm_wsl_detection_does_not_query_gpu(monkeypatch):
     assert not diagnostics.is_rocm_wsl()  # CUDA on WSL is unchanged.
 
 
+def test_rocm_wsl_environment_disables_async_weight_loading_only_for_rocm_wsl(monkeypatch):
+    env = {"HF_DEACTIVATE_ASYNC_LOAD": "0", "UNCHANGED": "yes"}
+    monkeypatch.setattr(diagnostics, "is_rocm_wsl", lambda: True)
+    assert diagnostics.configure_rocm_wsl_environment(env)
+    assert env == {
+        "HF_DEACTIVATE_ASYNC_LOAD": "1",
+        "MKL_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "TOKENIZERS_PARALLELISM": "false",
+        "UNCHANGED": "yes",
+    }
+
+    cuda_env = {"UNCHANGED": "yes"}
+    monkeypatch.setattr(diagnostics, "is_rocm_wsl", lambda: False)
+    assert not diagnostics.configure_rocm_wsl_environment(cuda_env)
+    assert cuda_env == {"UNCHANGED": "yes"}
+
+
+def test_local_training_environment_disables_only_nonessential_network_calls():
+    env = {"HF_UPDATE_DOWNLOAD_COUNTS": "1", "HF_HUB_OFFLINE": "0"}
+    diagnostics.configure_local_training_environment(env)
+    assert env["HF_UPDATE_DOWNLOAD_COUNTS"] == "1"  # Respect an explicit operator override.
+    assert env["HF_HUB_DISABLE_TELEMETRY"] == "1"
+    assert env["DO_NOT_TRACK"] == "1"
+    assert env["HF_HUB_OFFLINE"] == "0"  # Hub datasets remain available.
+
+
+def test_wsl_mount_detection_and_signal_description():
+    assert diagnostics.is_wsl_windows_mount("/mnt/d/trainer")
+    assert diagnostics.is_wsl_windows_mount("/mnt/D")
+    assert not diagnostics.is_wsl_windows_mount("/home/user/trainer")
+    assert not diagnostics.is_wsl_windows_mount(r"D:\trainer")
+    description = runner._describe_process_exit(-11, "zh")
+    assert "Exit code: -11" in description
+    assert "SIGSEGV" in description
+    assert "原生运行时故障" in description
+
+
+def test_native_fault_diagnostics_use_a_separate_file(monkeypatch, tmp_path):
+    calls = {}
+    monkeypatch.setenv("LLAMABOARD_ENABLED", "1")
+    monkeypatch.setenv("LLAMABOARD_WORKDIR", str(tmp_path))
+    monkeypatch.setattr(diagnostics.faulthandler, "enable", lambda **kwargs: calls.update(enable=kwargs))
+    monkeypatch.setattr(
+        diagnostics.faulthandler, "dump_traceback_later", lambda *args, **kwargs: calls.update(dump=kwargs)
+    )
+    monkeypatch.setattr(diagnostics, "stage", lambda *args, **kwargs: None)
+    diagnostics._fault_stream = None
+    try:
+        diagnostics.enable_diagnostics()
+        assert calls["enable"]["file"].name == str(tmp_path / diagnostics.NATIVE_FAULT_LOG)
+        assert calls["dump"]["file"] is calls["enable"]["file"]
+        assert "native-diagnostics" in (tmp_path / diagnostics.NATIVE_FAULT_LOG).read_text(encoding="utf-8")
+    finally:
+        if diagnostics._fault_stream is not None:
+            diagnostics._fault_stream.close()
+            diagnostics._fault_stream = None
+
+
 def test_stage_is_flushed_and_persisted(monkeypatch, tmp_path):
     monkeypatch.setenv("LLAMABOARD_WORKDIR", str(tmp_path))
     monkeypatch.setenv("LOCAL_RANK", "0")
@@ -101,6 +160,7 @@ def prepared_runner(monkeypatch, tmp_path, code=0):
 
         def __init__(self, command, **kwargs):
             assert kwargs["env"]["PYTHONUNBUFFERED"] == "1"
+            assert kwargs["env"]["HF_UPDATE_DOWNLOAD_COUNTS"] == "0"
             kwargs["stdout"].write("early import output\n")
 
         def poll(self):
@@ -135,6 +195,21 @@ def test_child_exit_and_dashboard_failure_restore_controls(monkeypatch, tmp_path
     assert not updates[-1]["train.stop_btn"].visible
     assert "dashboard unavailable" in (tmp_path / "webui_subprocess.log").read_text()
     assert json.loads((tmp_path / "lifecycle.jsonl").read_text().splitlines()[-1])["return_code"] == exit_code
+
+
+def test_webui_child_receives_rocm_wsl_weight_loading_guard(monkeypatch, tmp_path):
+    job, data = prepared_runner(monkeypatch, tmp_path)
+    observed = {}
+
+    def configure(env):
+        env["HF_DEACTIVATE_ASYNC_LOAD"] = "1"
+        observed.update(env)
+        return True
+
+    monkeypatch.setattr(runner, "configure_rocm_wsl_environment", configure)
+    list(job._launch(data))
+    assert observed["HF_DEACTIVATE_ASYNC_LOAD"] == "1"
+    assert "synchronous weight loading enabled" in (tmp_path / "webui_subprocess.log").read_text()
 
 
 def test_cancel_before_child_start_and_duplicate_click(monkeypatch, tmp_path):

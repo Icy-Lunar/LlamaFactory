@@ -60,6 +60,7 @@ MODEL_PATCHES = {
 }
 MODEL_PATCHES["glm"] = MODEL_PATCHES["glm4"]
 DEFAULT_PROBE_TIMEOUT = 300
+PROBE_RESULT_ENV = "LLAMAFACTORY_LIGER_PROBE_RESULT"
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,42 @@ class LigerStatus:
     reason: str
     detail: str = ""
     patches: tuple[str, ...] = ()
+
+
+def serialize_liger_status(status: LigerStatus, dtype: str) -> str:
+    """Serialize a preflight result so the WebUI child can reuse the exact probe."""
+    return json.dumps(
+        {
+            "dtype": dtype,
+            "enabled": status.enabled,
+            "reason": status.reason,
+            "detail": status.detail,
+            "patches": list(status.patches),
+        },
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+
+
+def _preflight_liger_status(dtype: str) -> LigerStatus | None:
+    raw_result = os.getenv(PROBE_RESULT_ENV)
+    if not raw_result:
+        return None
+    try:
+        result = json.loads(raw_result)
+        if not isinstance(result, dict) or result.get("dtype") != dtype:
+            return None
+        patches = result.get("patches", [])
+        if not isinstance(patches, list) or not all(isinstance(item, str) for item in patches):
+            return None
+        return LigerStatus(
+            bool(result.get("enabled")),
+            str(result.get("reason", "runtime")),
+            str(result.get("detail", "")),
+            tuple(patches),
+        )
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
 
 
 def _probe() -> None:
@@ -146,6 +183,9 @@ def get_liger_status(dtype: str = "float32") -> LigerStatus:
     """Cache a bounded runtime check; restart after changing drivers or packages."""
     if os.getenv("LLAMAFACTORY_LIGER", "auto").lower() == "off":
         return LigerStatus(False, "disabled")
+    preflight_status = _preflight_liger_status(dtype)
+    if preflight_status is not None:
+        return preflight_status
     try:
         if Version(metadata.version("liger-kernel")) < Version("0.8.0"):
             return LigerStatus(False, "version", "liger-kernel>=0.8.0 is required")

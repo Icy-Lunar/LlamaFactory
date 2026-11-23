@@ -25,7 +25,7 @@ from transformers import EarlyStoppingCallback, PreTrainedModel
 from ..data import get_template_and_fix_tokenizer
 from ..extras import logging
 from ..extras.constants import V_HEAD_SAFE_WEIGHTS_NAME, V_HEAD_WEIGHTS_NAME
-from ..extras.diagnostics import is_rocm_wsl, stage
+from ..extras.diagnostics import configure_rocm_wsl_environment, is_rocm_wsl, stage
 from ..extras.misc import find_available_port, get_device_name, get_torch_device, infer_optim_dtype
 from ..extras.packages import (
     is_hyper_parallel_available,
@@ -38,6 +38,7 @@ from ..hparams import RayArguments, get_infer_args, get_ray_args, get_train_args
 from ..model import load_model, load_tokenizer
 from .callbacks import (
     LogCallback,
+    MemoryCalibrationCallback,
     ModuleProfilerCallback,
     PissaConvertCallback,
     ReporterCallback,
@@ -73,6 +74,7 @@ def _training_function(config: dict[str, Any]) -> None:
     args = config.get("args")
     callbacks: list[Any] = config.get("callbacks")
     if is_rocm_wsl():
+        configure_rocm_wsl_environment(os.environ)
         stage("device_check")
         torch.set_num_threads(1)
         if not torch.cuda.is_available():
@@ -88,9 +90,13 @@ def _training_function(config: dict[str, Any]) -> None:
         data_args.preprocessing_num_workers = 1
         training_args.dataloader_num_workers = 0
         training_args.dataloader_pin_memory = False
-        logger.warning_rank0("ROCm/WSL safety: sequential preprocessing, zero DataLoader workers, no pinned memory.")
+        logger.warning_rank0(
+            "ROCm/WSL safety: synchronous weight loading, sequential preprocessing, zero DataLoader workers, "
+            "and no pinned memory."
+        )
 
     callbacks.append(LogCallback())
+    callbacks.append(MemoryCalibrationCallback())
     if finetuning_args.pissa_convert:
         callbacks.append(PissaConvertCallback())
 

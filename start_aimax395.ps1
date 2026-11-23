@@ -6,7 +6,7 @@ if (-not $env:PYTHON_BIN) {
     $pythonLauncher = Get-Command py -ErrorAction SilentlyContinue
     if ($pythonLauncher) {
         try {
-            $pythonPath = & $pythonLauncher.Source -3.12 -c "import sys; print(sys.executable)" 2>$null
+            $pythonPath = & $pythonLauncher.Source -c "import sys; print(sys.executable)" 2>$null
         } catch {
             $pythonPath = $null
         }
@@ -17,7 +17,17 @@ if (-not $env:PYTHON_BIN) {
     } elseif (Get-Command python -ErrorAction SilentlyContinue) {
         $env:PYTHON_BIN = (Get-Command python).Source
     } else {
-        throw 'Python 3.12 x64 was not found. Install it before running this script.'
+        if (-not $env:VENV_DIR) {
+            $env:VENV_DIR = Join-Path $PSScriptRoot '.venv-aimax395-windows'
+        }
+        if (-not $env:LLAMAFACTORY_LIGER_PROBE_TIMEOUT) {
+            $env:LLAMAFACTORY_LIGER_PROBE_TIMEOUT = '600'
+        }
+        if (-not $env:LLAMAFACTORY_DEFAULT_COMPUTE_TYPE) {
+            $env:LLAMAFACTORY_DEFAULT_COMPUTE_TYPE = 'fp16'
+        }
+        & "$PSScriptRoot/scripts/launch_windows.ps1" --backend rocm --rocm-profile aimax395 @args
+        exit $LASTEXITCODE
     }
 }
 

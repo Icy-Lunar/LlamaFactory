@@ -14,10 +14,12 @@
 
 
 def main():
+    import os
     import sys
 
-    from .extras.diagnostics import enable_console_log, enable_diagnostics
+    from .extras.diagnostics import configure_local_training_environment, enable_console_log, enable_diagnostics
 
+    configure_local_training_environment(os.environ)
     if "webui" in sys.argv:
         enable_console_log()
     enable_diagnostics()

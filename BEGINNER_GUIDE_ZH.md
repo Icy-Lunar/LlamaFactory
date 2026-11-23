@@ -68,7 +68,7 @@
 
 ### 2.3 Python
 
-推荐安装 64 位 Python 3.12。Windows 安装 Python 时建议勾选：
+如果已经安装 Python，可直接使用，一键启动器不会因为版本号不同而替换它。只有完全没有 Python 时，启动器才会安装项目默认的 64 位 Python 3.12。Windows 手动安装 Python 时建议勾选：
 
 ```text
 Add Python to PATH

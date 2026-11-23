@@ -8,13 +8,12 @@ export PYTHONUTF8=1
 
 if [[ -n "${PYTHON_BIN:-}" ]]; then
     BOOTSTRAP_PYTHON="$PYTHON_BIN"
-elif command -v python3.12 >/dev/null 2>&1; then
-    BOOTSTRAP_PYTHON=python3.12
 elif command -v python3 >/dev/null 2>&1; then
     BOOTSTRAP_PYTHON=python3
+elif command -v python >/dev/null 2>&1; then
+    BOOTSTRAP_PYTHON=python
 else
-    echo "Python 3.11 or newer is required." >&2
-    exit 1
+    exec bash "$PROJECT_ROOT/start_linux.sh" "$@"
 fi
 
 if [[ $# -eq 0 ]]; then

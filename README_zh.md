@@ -1,4 +1,4 @@
-> **Cyrene Yield 训练版：** WebUI 提供仅本地模型的四步引导式训练、Hugging Face 快速对话测试、实时及启动前显存估算和适配器合并。第一次使用请直接阅读[零基础完整使用手册](BEGINNER_GUIDE_ZH.md)；维护与实现细节见[现行说明](docs/CYRENE_YIELD_WEBUI.md)及 [2026-09-06 改进点](docs/WEBUI_IMPROVEMENTS_2026-09-06.md)。
+> **Cyrene Yield 训练版：** WebUI 提供仅本地模型的四步引导式训练、Hugging Face 快速对话测试、实时及启动前显存估算和适配器合并。第一次使用请直接阅读[零基础完整使用手册](BEGINNER_GUIDE_ZH.md)；维护与实现细节见[现行说明](docs/CYRENE_YIELD_WEBUI.md)、[ROCm/WSL 稳定性修复说明](ROCM_WSL_FIX_README.md)及 [2026-09-06 改进点](docs/WEBUI_IMPROVEMENTS_2026-09-06.md)。
 
 ![# LlamaFactory](assets/logo.png)
 

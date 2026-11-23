@@ -46,3 +46,21 @@ def test_primary_chinese_docs_link_to_beginner_guide():
     for relative in ("README_zh.md", "MULTIBACKEND_DEPLOYMENT.md"):
         content = (PROJECT_ROOT / relative).read_text(encoding="utf-8")
         assert "BEGINNER_GUIDE_ZH.md" in content
+
+
+def test_rocm_wsl_fix_readme_documents_runtime_guard_and_logs():
+    readme = (PROJECT_ROOT / "ROCM_WSL_FIX_README.md").read_text(encoding="utf-8")
+    for topic in (
+        "HF_DEACTIVATE_ASYNC_LOAD=1",
+        "native_fault.log",
+        "webui_subprocess.log",
+        "lifecycle.jsonl",
+        "SIGSEGV",
+        "--rocm-profile aimax395",
+        "--liger off",
+        "wsl --shutdown",
+    ):
+        assert topic in readme
+    assert "ROCM_WSL_FIX_README.md" in (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "ROCM_WSL_FIX_README.md" in (PROJECT_ROOT / "README_zh.md").read_text(encoding="utf-8")
+    assert readme.count("```") % 2 == 0

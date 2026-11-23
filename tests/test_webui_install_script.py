@@ -42,8 +42,8 @@ def test_aimax395_one_click_script_uses_isolated_official_rocm_profile():
     assert ".venv-aimax395-windows" in windows_script
     assert "--backend rocm" in windows_script
     assert "--rocm-profile aimax395" in windows_script
-    assert "-3.12" in windows_script
     assert "Get-Command py" in windows_script
+    assert "-3.12" not in windows_script
 
 
 def test_multibackend_one_click_entrypoints_are_present_and_forward_arguments():
@@ -67,12 +67,18 @@ def test_release_launchers_prepare_python_and_forward_to_the_shared_installer():
     assert "launch_windows.ps1" in windows
     assert "%*" in windows
     assert "Python.Python.3.12" in windows_bootstrap
+    assert "Find-InstalledPython" in windows_bootstrap
+    assert "sys.version_info" not in windows_bootstrap
+    assert "import sys, venv" not in windows_bootstrap
     assert "start_multibackend.ps1" in windows_bootstrap
     assert "-Verb RunAs" in windows_bootstrap
     assert "apt-get" in linux
     assert "dnf" in linux
     assert "zypper" in linux
     assert "pacman" in linux
+    assert "sys.version_info" not in linux
+    assert "import sys, venv" not in linux
+    assert "python_is_installed" in linux
     assert "scripts/terminal_wizard.py" in linux
     assert 'scripts/bootstrap_multibackend.py "$@"' in linux
 

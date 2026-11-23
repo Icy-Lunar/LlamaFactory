@@ -10,7 +10,7 @@
 start_windows.bat
 ```
 
-若未安装兼容的 Python，启动器会尝试通过 Windows `winget` 安装 Python 3.12。系统驱动安装可能触发管理员权限确认；驱动安装完成后，重启 Windows 并再次运行同一文件。
+启动器只检查系统中是否存在可执行的 Python：只要用户已经安装 Python，就直接复用，不按版本号自动替换或重装。只有完全找不到 Python 时，才会通过 Windows `winget` 安装项目默认的 Python 3.12。系统驱动安装可能触发管理员权限确认；驱动安装完成后，重启 Windows 并再次运行同一文件。
 
 ## Linux
 

@@ -16,6 +16,7 @@
 
 import json
 import os
+import signal
 import socket
 import sys
 import time
@@ -33,7 +34,14 @@ from transformers.utils import is_torch_cuda_available, is_torch_npu_available, 
 
 from ..extras.accelerator import configure_xpu_environment
 from ..extras.constants import LLAMABOARD_CONFIG, MULTIMODAL_SUPPORTED_MODELS, PEFT_METHODS, TRAINING_STAGES
-from ..extras.diagnostics import is_rocm_wsl, tail
+from ..extras.diagnostics import (
+    NATIVE_FAULT_LOG,
+    configure_local_training_environment,
+    configure_rocm_wsl_environment,
+    is_rocm_wsl,
+    is_wsl_windows_mount,
+    tail,
+)
 from ..extras.liger import get_local_liger_status
 from ..extras.packages import is_gradio_available
 from .common import (
@@ -50,6 +58,7 @@ from .common import (
 )
 from .control import get_trainer_info
 from .locales import ALERTS, LOCALES
+from .memory import write_memory_estimate_metadata
 from .runtime_locales import RUNTIME_LOCALES
 from .stage_locales import STAGE_VALIDATION_ERRORS
 
@@ -83,6 +92,31 @@ def _get_acceleration_args(model_path: str | None = None, compute_type: str = "f
 def _get_train_command(config_path: str) -> list[str]:
     r"""Build a training command that does not depend on the executable search path."""
     return [sys.executable, "-m", "llamafactory.cli", "train", config_path]
+
+
+def _describe_process_exit(return_code: int, lang: str) -> str:
+    """Explain POSIX signal exits while preserving the raw subprocess code."""
+    if return_code >= 0:
+        return f"Exit code: {return_code}"
+
+    signal_number = -return_code
+    try:
+        signal_name = signal.Signals(signal_number).name
+    except ValueError:
+        signal_name = f"SIGNAL_{signal_number}"
+    text = RUNTIME_LOCALES.get(lang, RUNTIME_LOCALES["en"])
+    return f"Exit code: {return_code}\n" + text["signal_exit"].format(signal=signal_name, number=signal_number)
+
+
+def _wsl_windows_mounts(*paths: str | os.PathLike[str] | None) -> list[str]:
+    """Return unique WSL DrvFS paths in stable order for warnings and logs."""
+    result = []
+    for path in paths:
+        if path and is_wsl_windows_mount(path):
+            normalized = os.fspath(path)
+            if normalized not in result:
+                result.append(normalized)
+    return result
 
 
 def _get_tensorboard_command(log_dir: str, host: str, port: int) -> list[str]:
@@ -603,10 +637,8 @@ class Runner:
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONUTF8"] = "1"
         env["PYTHONFAULTHANDLER"] = "1"
-        if is_rocm_wsl():
-            env.setdefault("TOKENIZERS_PARALLELISM", "false")
-            env.setdefault("OMP_NUM_THREADS", "1")
-            env.setdefault("MKL_NUM_THREADS", "1")
+        configure_local_training_environment(env)
+        rocm_wsl = configure_rocm_wsl_environment(env)
         _configure_accelerator_environment(env)
         if args.get("deepspeed", None) is not None:
             env["FORCE_TORCHRUN"] = "1"
@@ -615,10 +647,20 @@ class Runner:
         webui_log_path = os.path.join(args["output_dir"], "webui_subprocess.log")
         config_path = save_cmd(args)
         # Preserve previous diagnostics, but never show yesterday's state as this run.
-        for name in ("webui_subprocess.log", "runtime_state.json", "lifecycle.jsonl"):
+        for name in ("webui_subprocess.log", NATIVE_FAULT_LOG, "runtime_state.json", "lifecycle.jsonl"):
             path = os.path.join(args["output_dir"], name)
             if os.path.exists(path):
                 os.replace(path, path + f".{time.time_ns()}.previous")
+        memory_estimate_path = None
+        memory_estimate_error = None
+        try:
+            memory_estimate_path = write_memory_estimate_metadata(args)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            # Estimation is advisory and must never prevent a valid training job from starting.
+            memory_estimate_error = traceback.format_exc()
+        mounted_paths = (
+            _wsl_windows_mounts(sys.prefix, args.get("model_name_or_path"), args["output_dir"]) if rocm_wsl else []
+        )
         tensorboard_url = None
         tensorboard_log_dir = None
         try:
@@ -626,6 +668,16 @@ class Runner:
                 return
             with open(webui_log_path, "a", encoding="utf-8") as webui_log:
                 webui_log.write(f"[launch] {time.strftime('%Y-%m-%d %H:%M:%S')} config={config_path}\n")
+                if memory_estimate_path is not None:
+                    webui_log.write(f"[memory] estimate={memory_estimate_path}\n")
+                elif memory_estimate_error is not None:
+                    webui_log.write("[memory] estimate unavailable:\n" + memory_estimate_error)
+                if rocm_wsl:
+                    webui_log.write(
+                        "[rocm-wsl] synchronous weight loading enabled; CPU and DataLoader concurrency limited.\n"
+                    )
+                if mounted_paths:
+                    webui_log.write("[rocm-wsl] Windows-mounted paths: " + ", ".join(mounted_paths) + "\n")
                 webui_log.flush()
                 self.trainer = Popen(
                     _get_train_command(config_path),
@@ -634,6 +686,9 @@ class Runner:
                     stderr=webui_log,
                     text=True,
                 )
+            if mounted_paths:
+                text = RUNTIME_LOCALES.get(lang, RUNTIME_LOCALES["en"])
+                gr.Warning(text["wsl_mount_warning"].format(paths=", ".join(mounted_paths)))
             if args.get("report_to") == "tensorboard" and not self.aborted:
                 try:
                     tensorboard_url, tensorboard_log_dir = self._start_tensorboard(args["output_dir"], env, request)
@@ -808,9 +863,16 @@ class Runner:
                 else:
                     stderr = "No subprocess log file found."
 
+            native_fault_path = os.path.join(output_path, NATIVE_FAULT_LOG)
+            native_fault = tail(native_fault_path) if os.path.exists(native_fault_path) else ""
+            if native_fault:
+                text = RUNTIME_LOCALES.get(lang, RUNTIME_LOCALES["en"])
+                stderr = str(stderr) + "\n\n" + text["native_fault_heading"] + "\n" + native_fault
+
             print(stderr)
             finish_info = ALERTS["err_failed"][lang]
-            finish_log = ALERTS["err_failed"][lang] + f" Exit code: {return_code}\n\n{self.launch_failure}"
+            exit_description = _describe_process_exit(return_code, lang)
+            finish_log = ALERTS["err_failed"][lang] + f"\n{exit_description}\n\n{self.launch_failure}"
             finish_log += f"\n\n<pre>{escape(str(stderr))}</pre>"
 
         if not observe_only:

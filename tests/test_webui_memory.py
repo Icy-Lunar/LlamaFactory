@@ -15,16 +15,22 @@
 import json
 from dataclasses import replace
 from math import prod
+from types import SimpleNamespace
 
 import pytest
 
+from llamafactory.extras.memory_calibration import get_calibration, record_calibration
+from llamafactory.train.callbacks import MemoryCalibrationCallback
+from llamafactory.webui import memory as memory_module
 from llamafactory.webui.memory import (
     SAFETY_MARGIN,
+    DeviceMemory,
     ModelShape,
     _estimate_parameter_count,
     estimate_training_memory,
     get_local_weight_size,
     read_model_shape,
+    write_memory_estimate_metadata,
 )
 
 
@@ -65,6 +71,7 @@ def _estimate(shape: ModelShape, **overrides):
         "offload": False,
         "device_count": 1,
         "booster": "liger_kernel",
+        "apply_calibration": False,
     }
     kwargs.update(overrides)
     return estimate_training_memory(shape, **kwargs)
@@ -323,3 +330,219 @@ def test_moe_counts_all_expert_adapters_but_only_active_expert_activations() -> 
 
     assert sparse_estimate.trainable_parameter_count > dense_estimate.trainable_parameter_count
     assert dense_moe_estimate.activation_gib > sparse_estimate.activation_gib
+
+
+def test_lora_target_only_counts_selected_projections() -> None:
+    shape = _qwen_shape()
+    all_linear = _estimate(shape, lora_target="all")
+    qv_only = _estimate(shape, lora_target="q_proj,v_proj")
+
+    assert qv_only.trainable_parameter_count < all_linear.trainable_parameter_count
+    assert qv_only.trainable_state_gib < all_linear.trainable_state_gib
+
+
+def test_attention_backend_changes_long_context_workspace() -> None:
+    shape = _qwen_shape()
+    eager = _estimate(shape, cutoff_len=8192, attention_backend="eager")
+    sdpa = _estimate(shape, cutoff_len=8192, attention_backend="sdpa")
+    flash = _estimate(shape, cutoff_len=8192, attention_backend="flash_attention_2")
+
+    assert eager.activation_gib > sdpa.activation_gib > flash.activation_gib
+
+
+def test_pure_bf16_does_not_allocate_fp32_master_weights() -> None:
+    shape = _qwen_shape()
+    mixed = _estimate(shape, finetuning_type="full", quantization_bit="none", compute_type="bf16")
+    pure = _estimate(shape, finetuning_type="full", quantization_bit="none", compute_type="pure_bf16")
+
+    assert pure.trainable_state_gib < mixed.trainable_state_gib
+
+
+def test_video_frame_count_changes_multimodal_activation() -> None:
+    shape = replace(_qwen_shape(), is_multimodal=True, vision_hidden_size=1024, vision_num_hidden_layers=24)
+    short_clip = _estimate(shape, video_num_frames=4)
+    long_clip = _estimate(shape, video_num_frames=32)
+
+    assert long_clip.activation_gib > short_clip.activation_gib
+
+
+def test_memory_calibration_uses_bounded_ema(tmp_path) -> None:
+    path = tmp_path / "calibration.json"
+    first = record_calibration("bucket", actual_gib=12, base_estimated_gib=10, path=path)
+    second = record_calibration("bucket", actual_gib=16, base_estimated_gib=10, path=path)
+    factor, samples = get_calibration("bucket", path=path)
+
+    assert first is not None and first["ema_ratio"] == pytest.approx(1.2)
+    assert second is not None and second["ema_ratio"] == pytest.approx(1.3)
+    assert factor == pytest.approx(1.3)
+    assert samples == 2
+
+
+def test_model_shape_scan_is_cached_until_directory_changes(tmp_path, monkeypatch) -> None:
+    (tmp_path / "config.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "model.bin").write_bytes(b"weights")
+    memory_module._read_model_shape_cached.cache_clear()
+    original_scan = memory_module._scan_weight_files
+    calls = 0
+
+    def counted_scan(model_dir):
+        nonlocal calls
+        calls += 1
+        return original_scan(model_dir)
+
+    monkeypatch.setattr(memory_module, "_scan_weight_files", counted_scan)
+    read_model_shape(str(tmp_path))
+    read_model_shape(str(tmp_path))
+
+    assert calls == 1
+
+
+def test_training_callback_records_actual_peak(tmp_path, monkeypatch) -> None:
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    calibration_path = tmp_path / "calibration.json"
+    monkeypatch.setenv("LLAMAFACTORY_MEMORY_CALIBRATION_FILE", str(calibration_path))
+    (output_dir / "memory_estimate.json").write_text(
+        json.dumps({"calibration_key": "test", "base_estimated_gib": 4.0, "estimated_gib": 5.0}),
+        encoding="utf-8",
+    )
+
+    class FakeMemoryApi:
+        reset = False
+
+        def reset_peak_memory_stats(self):
+            self.reset = True
+
+        def max_memory_allocated(self):
+            return 6 * 1024**3
+
+    api = FakeMemoryApi()
+    callback = MemoryCalibrationCallback()
+    monkeypatch.setattr(callback, "_select_memory_api", lambda: api)
+    args = SimpleNamespace(should_save=True, output_dir=str(output_dir))
+    callback.on_train_begin(args, SimpleNamespace(), SimpleNamespace())
+    callback.on_train_end(args, SimpleNamespace(), SimpleNamespace())
+
+    observation = json.loads((output_dir / "memory_actual.json").read_text(encoding="utf-8"))
+    assert api.reset is True
+    assert observation["actual_peak_gib"] == pytest.approx(6.0)
+    assert get_calibration("test", calibration_path) == pytest.approx((1.5, 1))
+
+
+def test_extended_optimizer_and_fsdp_models_change_state_memory() -> None:
+    shape = _qwen_shape()
+    adam = _estimate(shape, finetuning_type="full", quantization_bit="none", optimizer="adamw_torch")
+    galore = _estimate(
+        shape,
+        finetuning_type="full",
+        quantization_bit="none",
+        optimizer="adamw_torch",
+        use_galore=True,
+        projection_rank=16,
+    )
+    full_shard = _estimate(
+        shape,
+        finetuning_type="full",
+        quantization_bit="none",
+        device_count=4,
+        fsdp_strategy="full_shard",
+    )
+    shard_grad = _estimate(
+        shape,
+        finetuning_type="full",
+        quantization_bit="none",
+        device_count=4,
+        fsdp_strategy="shard_grad_op",
+    )
+
+    assert galore.trainable_state_gib < adam.trainable_state_gib
+    assert full_shard.model_gib < shard_grad.model_gib
+
+
+def test_vllm_colocation_and_chunked_cross_entropy_are_modeled() -> None:
+    shape = _qwen_shape()
+    standard = _estimate(shape, booster="none", cross_entropy_mode="standard")
+    chunked = _estimate(shape, booster="none", cross_entropy_mode="chunked", cross_entropy_chunk_size=4096)
+    ppo = _estimate(shape, stage="ppo", use_vllm=False)
+    ppo_colocated = _estimate(
+        shape,
+        stage="ppo",
+        use_vllm=True,
+        vllm_colocate=True,
+        vllm_gpu_util=0.4,
+        total_device_gib=80,
+    )
+
+    assert chunked.activation_gib < standard.activation_gib
+    assert ppo_colocated.model_gib > ppo.model_gib
+
+
+def test_four_bit_group_size_and_offload_target_affect_estimate() -> None:
+    small_groups = _estimate(replace(_qwen_shape(), quantization_group_size=32))
+    large_groups = _estimate(replace(_qwen_shape(), quantization_group_size=128))
+    cpu_offload = _estimate(
+        _qwen_shape(),
+        finetuning_type="full",
+        quantization_bit="none",
+        deepspeed_stage="3",
+        device_count=4,
+        offload=True,
+        offload_target="cpu",
+    )
+    nvme_offload = _estimate(
+        _qwen_shape(),
+        finetuning_type="full",
+        quantization_bit="none",
+        deepspeed_stage="3",
+        device_count=4,
+        offload=True,
+        offload_target="nvme",
+    )
+
+    assert small_groups.model_gib > large_groups.model_gib
+    assert nvme_offload.model_gib < cpu_offload.model_gib
+
+
+def test_runner_metadata_is_generated_from_final_training_args(tmp_path, monkeypatch) -> None:
+    model_dir = tmp_path / "model"
+    output_dir = tmp_path / "output"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text(
+        json.dumps(
+            {
+                "hidden_size": 16,
+                "intermediate_size": 32,
+                "num_attention_heads": 2,
+                "num_hidden_layers": 1,
+                "num_key_value_heads": 2,
+                "vocab_size": 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (model_dir / "model.bin").write_bytes(b"weights" * 32)
+    monkeypatch.setattr(
+        memory_module,
+        "get_device_memory_snapshot",
+        lambda: DeviceMemory(free_gib=12.0, total_gib=16.0, device_count=1),
+    )
+
+    path = write_memory_estimate_metadata(
+        {
+            "model_name_or_path": str(model_dir),
+            "output_dir": str(output_dir),
+            "finetuning_type": "lora",
+            "lora_target": "q_proj,v_proj",
+            "lora_rank": 4,
+            "quantization_bit": 4,
+            "cutoff_len": 1024,
+            "per_device_train_batch_size": 1,
+            "stage": "sft",
+            "bf16": True,
+            "flash_attn": "sdpa",
+        }
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+
+    assert payload["base_estimated_gib"] > 0
+    assert "lora-q_proj,v_proj" in payload["calibration_key"]

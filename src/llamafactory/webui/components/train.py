@@ -308,12 +308,17 @@ def _build_memory_report(
         f"<div><span>{escape(label)}</span><strong>{escape(value)}</strong></div>"
         for label, value in zip(labels, values, strict=True)
     )
+    calibration = (
+        f'<p class="oobe-memory-calibration">{escape(text["calibration"].format(samples=estimate.calibration_samples, factor=estimate.calibration_factor))}</p>'
+        if estimate.calibration_samples > 0
+        else ""
+    )
     return (
         f'<section class="oobe-memory-report is-{status}" role="status">'
         f'<header><span aria-hidden="true">{"✓" if status == "safe" else "!"}</span><div>'
         f"<strong>{escape(text['titles'][status])}</strong>"
         f"<p>{escape(text['descriptions'][status])}</p></div></header>"
-        f'<div class="oobe-memory-grid">{rows}</div></section>'
+        f'<div class="oobe-memory-grid">{rows}</div>{calibration}</section>'
     )
 
 
@@ -405,6 +410,26 @@ def _assess_training_memory(
         use_badam=bool(get("train.use_badam", False)),
         badam_mode=str(get("train.badam_mode", "layer")),
         badam_update_ratio=float(get("train.badam_update_ratio", 0.05)),
+        lora_target=get("train.lora_target", "all"),
+        attention_backend=str(extra_args.get("flash_attn", "sdpa")),
+        cross_entropy_mode=("chunked" if extra_args.get("chunked_cross_entropy", False) else "auto"),
+        cross_entropy_chunk_size=int(extra_args.get("cross_entropy_chunk_size", 8192)),
+        double_quantization=bool(extra_args.get("double_quantization", True)),
+        offload_target=str(extra_args.get("offload_target", "cpu")),
+        fsdp_strategy=str(extra_args.get("fsdp", "none")),
+        fsdp_shard_size=int(extra_args.get("fsdp_shard_size", 0)),
+        use_galore=bool(get("train.use_galore", False)),
+        use_apollo=bool(get("train.use_apollo", False)),
+        use_adam_mini=bool(extra_args.get("use_adam_mini", False)),
+        use_muon=bool(extra_args.get("use_muon", False)),
+        projection_rank=int(
+            get("train.galore_rank", 16) if get("train.use_galore", False) else get("train.apollo_rank", 16)
+        ),
+        video_num_frames=int(extra_args.get("video_maxlen", 128)),
+        use_vllm=bool(extra_args.get("use_vllm", False)),
+        vllm_gpu_util=float(extra_args.get("vllm_gpu_util", extra_args.get("vllm_gpu_memory_utilization", 0.0))),
+        vllm_colocate=bool(extra_args.get("vllm_colocate", True)),
+        total_device_gib=float(device_memory.total_gib or 0.0),
     )
 
     if device_memory.free_gib is None:

@@ -30,7 +30,7 @@
 
 ### 2.1 Windows：安装并启动
 
-先安装 64 位 Python。项目要求 Python 3.11 或更高，建议使用 Python 3.12；AMD Windows 默认安装方案要求 Python 3.12。
+如果系统已有可执行的 Python，一键启动器会直接复用，不因版本号不同而自动重装。只有系统完全找不到 Python 时，才安装项目默认的 64 位 Python 3.12。Python 包和 AMD 厂商 wheel 自身的兼容性仍由 pip 在安装时检查。
 
 在 PowerShell 中运行：
 

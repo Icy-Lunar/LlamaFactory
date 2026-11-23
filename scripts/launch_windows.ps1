@@ -8,7 +8,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $projectRoot
 $env:PYTHONUTF8 = '1'
 
-function Test-CompatiblePython {
+function Test-PythonExecutable {
     param([string]$Executable)
 
     if (-not $Executable) {
@@ -24,14 +24,14 @@ function Test-CompatiblePython {
     }
 
     try {
-        & $Executable -X utf8 -c "import sys, venv; raise SystemExit(0 if (3, 11) <= sys.version_info[:2] <= (3, 13) else 1)" 2>$null
+        & $Executable -X utf8 -c "import sys; print(sys.executable)" 2>$null | Out-Null
         return $LASTEXITCODE -eq 0
     } catch {
         return $false
     }
 }
 
-function Find-CompatiblePython {
+function Find-InstalledPython {
     $candidates = [System.Collections.Generic.List[string]]::new()
     if ($env:PYTHON_BIN) {
         $candidates.Add($env:PYTHON_BIN)
@@ -44,29 +44,34 @@ function Find-CompatiblePython {
 
     $launcher = Get-Command py -ErrorAction SilentlyContinue
     if ($launcher) {
-        foreach ($version in @('-3.12', '-3.13', '-3.11')) {
-            try {
-                $resolved = & $launcher.Source $version -c "import sys; print(sys.executable)" 2>$null
-                if ($LASTEXITCODE -eq 0 -and $resolved) {
-                    $candidates.Add($resolved.Trim())
-                }
-            } catch {
-                continue
+        try {
+            $resolved = & $launcher.Source -c "import sys; print(sys.executable)" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $resolved) {
+                $candidates.Add($resolved.Trim())
             }
+        } catch {
+            # Continue with regular PATH and known installation locations.
         }
     }
 
-    foreach ($commandName in @('python3.12', 'python3', 'python')) {
+    foreach ($commandName in @('python', 'python3', 'python3.12')) {
         $command = Get-Command $commandName -ErrorAction SilentlyContinue
         if ($command) {
             $candidates.Add($command.Source)
         }
     }
 
-    $knownLocations = @(
-        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
-        (Join-Path $env:ProgramFiles 'Python312\python.exe')
-    )
+    $knownLocations = @()
+    foreach ($basePath in @((Join-Path $env:LOCALAPPDATA 'Programs\Python'), $env:ProgramFiles)) {
+        if ($basePath -and (Test-Path -LiteralPath $basePath -PathType Container)) {
+            foreach ($directory in Get-ChildItem -LiteralPath $basePath -Directory -Filter 'Python*' -ErrorAction SilentlyContinue) {
+                $candidate = Join-Path $directory.FullName 'python.exe'
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                    $knownLocations += $candidate
+                }
+            }
+        }
+    }
     foreach ($candidate in $knownLocations) {
         if ($candidate) {
             $candidates.Add($candidate)
@@ -74,7 +79,7 @@ function Find-CompatiblePython {
     }
 
     foreach ($candidate in $candidates | Select-Object -Unique) {
-        if (Test-CompatiblePython $candidate) {
+        if (Test-PythonExecutable $candidate) {
             if (Test-Path -LiteralPath $candidate -PathType Leaf) {
                 return (Resolve-Path -LiteralPath $candidate).Path
             }
@@ -87,23 +92,23 @@ function Find-CompatiblePython {
 function Install-Python312 {
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if (-not $winget) {
-        throw 'Python 3.11-3.13 with the venv module was not found, and winget is unavailable. Install Python 3.12 x64, then run this file again.'
+        throw 'Python was not found, and winget is unavailable. Install Python, then run this file again.'
     }
 
-    Write-Host 'Python 3.12 was not found. Installing the official Python 3.12 package with winget...'
+    Write-Host 'Python was not found. Installing the bundled default Python package with winget...'
     & $winget.Source install --id Python.Python.3.12 --exact --silent --scope user --accept-package-agreements --accept-source-agreements
     if ($LASTEXITCODE -notin @(0, 3010)) {
         throw "winget could not install Python 3.12 (exit code $LASTEXITCODE)."
     }
 }
 
-$bootstrapPython = Find-CompatiblePython
+$bootstrapPython = Find-InstalledPython
 if (-not $bootstrapPython) {
     Install-Python312
-    $bootstrapPython = Find-CompatiblePython
+    $bootstrapPython = Find-InstalledPython
 }
 if (-not $bootstrapPython) {
-    throw 'Python 3.12 was installed but could not be located. Open a new terminal and run start_windows.bat again.'
+    throw 'Python was installed but could not be located. Open a new terminal and run start_windows.bat again.'
 }
 
 $env:PYTHON_BIN = $bootstrapPython

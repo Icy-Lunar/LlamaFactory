@@ -16,7 +16,7 @@ Linux / Git Bash：
 bash start_webui.sh
 ```
 
-也可直接使用 Python 3.11 及以上（建议 3.12）：
+也可直接使用系统中已经安装的 Python。启动器不会按版本号替换现有 Python；只有完全找不到 Python 时才安装项目默认版本。项目依赖和硬件厂商 wheel 仍可能由 pip 报告其自身的兼容性要求：
 
 ```bash
 python scripts/bootstrap_webui.py

@@ -19,12 +19,47 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 
+NATIVE_FAULT_LOG = "native_fault.log"
+_fault_stream = None
+
+
 def is_rocm_wsl() -> bool:
     # Inspect build metadata, never call a GPU API from the Gradio request thread.
     torch = sys.modules.get("torch")
     return bool(getattr(getattr(torch, "version", None), "hip", None)) and (
         "microsoft" in platform.release().lower() or bool(os.getenv("WSL_INTEROP"))
     )
+
+
+def configure_rocm_wsl_environment(env: dict[str, str]) -> bool:
+    """Apply process-local ROCm/WSL safeguards without changing other backends."""
+    if not is_rocm_wsl():
+        return False
+
+    # Transformers 5 uses a thread pool while materializing model tensors. Concurrent
+    # host-to-device copies have caused native ROCm/WSL crashes, so make that phase
+    # deterministic. This variable is read by Transformers when weights are loaded.
+    env["HF_DEACTIVATE_ASYNC_LOAD"] = "1"
+    env.setdefault("TOKENIZERS_PARALLELISM", "false")
+    env.setdefault("OMP_NUM_THREADS", "1")
+    env.setdefault("MKL_NUM_THREADS", "1")
+    return True
+
+
+def configure_local_training_environment(env: dict[str, str]) -> None:
+    """Disable nonessential telemetry without disabling local or Hub datasets."""
+    env.setdefault("HF_UPDATE_DOWNLOAD_COUNTS", "0")
+    env.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+    env.setdefault("DO_NOT_TRACK", "1")
+
+
+def is_wsl_windows_mount(path: str | os.PathLike[str] | None) -> bool:
+    """Return whether a path is on a Windows drive mounted through WSL DrvFS."""
+    if not path:
+        return False
+
+    normalized = os.fspath(path).replace("\\", "/")
+    return re.match(r"^/mnt/[a-z](?:/|$)", normalized, flags=re.IGNORECASE) is not None
 
 
 def redact(text: str) -> str:
@@ -67,11 +102,25 @@ def stage(name: str, **details) -> None:
 
 
 def enable_diagnostics() -> None:
+    global _fault_stream
     if os.getenv("LLAMABOARD_ENABLED") != "1":
         return
-    faulthandler.enable()
+
+    directory = os.getenv("LLAMABOARD_WORKDIR")
+    if directory:
+        try:
+            fault_path = Path(directory) / NATIVE_FAULT_LOG
+            fault_path.parent.mkdir(parents=True, exist_ok=True)
+            _fault_stream = fault_path.open("a", encoding="utf-8", buffering=1)
+            _fault_stream.write(f"\n[native-diagnostics] {time.strftime('%Y-%m-%d %H:%M:%S')} pid={os.getpid()}\n")
+        except OSError as error:
+            print(f"[diagnostics] Cannot open native fault log: {error}", file=sys.stderr, flush=True)
+            _fault_stream = None
+
+    fault_target = _fault_stream or sys.stderr
+    faulthandler.enable(file=fault_target, all_threads=True)
     # Native stalls can hold the GIL: faulthandler's watchdog does not require it.
-    faulthandler.dump_traceback_later(120, repeat=True)
+    faulthandler.dump_traceback_later(120, repeat=True, file=fault_target)
     stage("runtime_import", python=platform.python_version(), platform=platform.system())
 
 

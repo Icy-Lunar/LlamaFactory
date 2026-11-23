@@ -161,6 +161,23 @@ def test_strict_environment_verification_requires_all_capabilities(monkeypatch):
     assert "--require-all-capabilities" in commands[-1]
 
 
+def test_environment_verification_returns_machine_readable_liger_result(monkeypatch, tmp_path):
+    status_file = tmp_path / "status.json"
+
+    def run(command, **kwargs):
+        if "--status-file" in command:
+            target = Path(command[command.index("--status-file") + 1])
+            target.write_text(
+                '{"liger":{"enabled":true,"probe_dtype":"bfloat16","patches":["qwen3"]}}', encoding="utf-8"
+            )
+        return True
+
+    monkeypatch.setattr(installer, "run", run)
+    report = installer.verify_environment(Path("python"), "rocm", "auto", status_file=status_file)
+    assert report["liger"]["enabled"] is True
+    assert report["liger"]["probe_dtype"] == "bfloat16"
+
+
 def test_hardware_constraints_preserve_xpu_and_block_competing_triton():
     constraints = installer.hardware_constraints(
         {"torch": "2.13.0+xpu", "triton-xpu": "3.7.2", "tensorboard": "2.21.0"}

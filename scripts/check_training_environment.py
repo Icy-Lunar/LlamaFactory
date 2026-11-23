@@ -21,6 +21,7 @@ import importlib.metadata as metadata
 import io
 import json
 import os
+from pathlib import Path
 
 
 def package_version(name: str) -> str | None:
@@ -105,6 +106,7 @@ def main():
     parser.add_argument("--backend", required=True)
     parser.add_argument("--liger", choices=("auto", "off", "required"), default="auto")
     parser.add_argument("--expected-arch")
+    parser.add_argument("--status-file", type=Path)
     parser.add_argument("--require-all-capabilities", action="store_true")
     args = parser.parse_args()
     import torch
@@ -148,10 +150,8 @@ def main():
             f"WARNING: do not select 4-bit/8-bit quantization on {device_type} until the report says it is available."
         )
     liger_dtype = "float32"
-    if args.backend == "cuda":
+    if args.backend in {"cuda", "rocm"}:
         liger_dtype = "bfloat16" if torch.cuda.is_bf16_supported() else "float16"
-    elif args.backend == "rocm":
-        liger_dtype = "float16"
     status = get_liger_status(liger_dtype)
     if args.liger == "required" and not status.enabled:
         raise RuntimeError(f"Liger is required but unavailable: {status.reason}: {status.detail}")
@@ -167,54 +167,55 @@ def main():
             unavailable.append("Liger acceleration")
         if unavailable:
             raise RuntimeError("Required training capabilities unavailable: " + ", ".join(unavailable))
-    print(
-        json.dumps(
-            {
-                "device": str(device),
-                "device_arch": device_arch,
-                "torch": torch.__version__,
-                "torchvision": torchvision_version,
-                "torchaudio": torchaudio_version,
-                "media_extensions": {
-                    "vision": torchvision_status,
-                    "audio": torchaudio_status,
-                },
-                "bitsandbytes": bnb_version,
-                "quantization": quantization,
-                "tensorboard": tensorboard.__version__,
-                "gradio": gradio.__version__,
-                "metrics": [nltk.__name__, jieba.__name__, rouge_chinese.__name__],
-                "triton_providers": {
-                    dist.metadata["Name"]: dist.version
+    report = {
+        "device": str(device),
+        "device_arch": device_arch,
+        "torch": torch.__version__,
+        "torchvision": torchvision_version,
+        "torchaudio": torchaudio_version,
+        "media_extensions": {
+            "vision": torchvision_status,
+            "audio": torchaudio_status,
+        },
+        "bitsandbytes": bnb_version,
+        "quantization": quantization,
+        "tensorboard": tensorboard.__version__,
+        "gradio": gradio.__version__,
+        "metrics": [nltk.__name__, jieba.__name__, rouge_chinese.__name__],
+        "triton_providers": {
+            dist.metadata["Name"]: dist.version
+            for dist in metadata.distributions()
+            if dist.metadata["Name"].lower().replace("_", "-")
+            in {
+                "triton",
+                "triton-windows",
+                "triton-xpu",
+                "pytorch-triton-xpu",
+                "pytorch-triton-rocm",
+                "triton-ascend",
+            }
+        },
+        "liger": {
+            "enabled": status.enabled,
+            "reason": status.reason,
+            "detail": status.detail,
+            "probe_dtype": liger_dtype,
+            "patches": list(status.patches),
+            "version": next(
+                (
+                    dist.version
                     for dist in metadata.distributions()
-                    if dist.metadata["Name"].lower().replace("_", "-")
-                    in {
-                        "triton",
-                        "triton-windows",
-                        "triton-xpu",
-                        "pytorch-triton-xpu",
-                        "pytorch-triton-rocm",
-                        "triton-ascend",
-                    }
-                },
-                "liger": {
-                    "enabled": status.enabled,
-                    "reason": status.reason,
-                    "detail": status.detail,
-                    "probe_dtype": liger_dtype,
-                    "version": next(
-                        (
-                            dist.version
-                            for dist in metadata.distributions()
-                            if dist.metadata["Name"].lower().replace("_", "-") == "liger-kernel"
-                        ),
-                        None,
-                    ),
-                },
-            },
-            indent=2,
-        )
-    )
+                    if dist.metadata["Name"].lower().replace("_", "-") == "liger-kernel"
+                ),
+                None,
+            ),
+        },
+    }
+    report_text = json.dumps(report, indent=2)
+    print(report_text)
+    if args.status_file is not None:
+        args.status_file.parent.mkdir(parents=True, exist_ok=True)
+        args.status_file.write_text(report_text + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

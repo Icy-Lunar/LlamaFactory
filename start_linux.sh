@@ -6,18 +6,17 @@ PROJECT_ROOT="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_ROOT"
 export PYTHONUTF8=1
 
-python_is_compatible() {
+python_is_installed() {
     local executable="$1"
     [[ -n "$executable" ]] || return 1
     command -v "$executable" >/dev/null 2>&1 || [[ -x "$executable" ]] || return 1
-    "$executable" -X utf8 -c 'import sys, venv; raise SystemExit(0 if (3, 11) <= sys.version_info[:2] <= (3, 13) else 1)' \
-        >/dev/null 2>&1
+    "$executable" -X utf8 -c 'import sys; print(sys.executable)' >/dev/null 2>&1
 }
 
 find_python() {
     local candidate
-    for candidate in "${PYTHON_BIN:-}" python3.12 python3.13 python3.11 python3 python; do
-        if python_is_compatible "$candidate"; then
+    for candidate in "${PYTHON_BIN:-}" python3 python python3.12; do
+        if python_is_installed "$candidate"; then
             command -v "$candidate" 2>/dev/null || printf '%s\n' "$candidate"
             return 0
         fi
@@ -56,7 +55,7 @@ install_python() {
     elif command -v pacman >/dev/null 2>&1; then
         "${sudo_prefix[@]}" pacman -Sy --needed --noconfirm python python-pip git curl ca-certificates
     else
-        echo 'No supported package manager was found. Install Python 3.11-3.13 with the venv module.' >&2
+        echo 'No supported package manager was found. Install Python, then run this file again.' >&2
         exit 1
     fi
 }
@@ -68,13 +67,12 @@ fi
 
 BOOTSTRAP_PYTHON="$(find_python || true)"
 if [[ -z "$BOOTSTRAP_PYTHON" ]]; then
-    echo 'A compatible Python runtime was not found. Installing system prerequisites...'
+    echo 'Python was not found. Installing the project default Python package...'
     install_python
     BOOTSTRAP_PYTHON="$(find_python || true)"
 fi
 if [[ -z "$BOOTSTRAP_PYTHON" ]]; then
-    echo 'Python was installed, but Python 3.11-3.13 with venv is still unavailable.' >&2
-    echo 'Use Ubuntu 24.04+ or install Python 3.12, then run this file again.' >&2
+    echo 'Python was installed but could not be executed. Open a new terminal, then run this file again.' >&2
     exit 1
 fi
 

@@ -489,7 +489,8 @@ def verify_environment(
     expected_arch: str | None = None,
     *,
     require_all_capabilities: bool = False,
-) -> None:
+    status_file: Path | None = None,
+) -> dict | None:
     run([str(python), "-m", "pip", "check"])
     command = [
         str(python),
@@ -501,11 +502,20 @@ def verify_environment(
         "--liger",
         liger,
     ]
+    if status_file is not None:
+        command.extend(["--status-file", str(status_file)])
     if expected_arch:
         command.extend(["--expected-arch", expected_arch])
     if require_all_capabilities:
         command.append("--require-all-capabilities")
     run(command)
+    if status_file is None or not status_file.is_file():
+        return None
+    try:
+        report = json.loads(status_file.read_text(encoding="utf-8"))
+        return report if isinstance(report, dict) else None
+    except (OSError, ValueError):
+        return None
 
 
 def parse_args(argv=None):
@@ -555,8 +565,6 @@ def main(argv=None) -> None:
         args.liger = "required"
     if args.check_only and args.cann_installer:
         raise ValueError("--check-only cannot be combined with --cann-installer.")
-    if sys.version_info < (3, 11):  # noqa: UP036 - the bootstrap also runs before the project is installed.
-        raise ValueError("Python 3.11 or newer is required; Python 3.12 is recommended.")
     os.environ["PYTHONUTF8"] = "1"
     webui_host = None
     if not args.no_start and not args.check_only:
@@ -713,13 +721,28 @@ def main(argv=None) -> None:
     if not python.exists():
         raise ValueError("Environment does not exist. Run without --skip-install/--check-only first.")
     expected_arch = "gfx1151" if args.rocm_profile == "aimax395" else None
-    verify_environment(
-        python,
-        backend,
-        args.liger,
-        expected_arch,
-        require_all_capabilities=args.require_all_capabilities,
-    )
+    with tempfile.TemporaryDirectory(prefix="llamafactory-verification-") as temporary:
+        verification = verify_environment(
+            python,
+            backend,
+            args.liger,
+            expected_arch,
+            require_all_capabilities=args.require_all_capabilities,
+            status_file=Path(temporary) / "status.json",
+        )
+    liger_report = verification.get("liger") if isinstance(verification, dict) else None
+    if isinstance(liger_report, dict) and liger_report.get("probe_dtype"):
+        os.environ["LLAMAFACTORY_LIGER_PROBE_RESULT"] = json.dumps(
+            {
+                "dtype": liger_report["probe_dtype"],
+                "enabled": bool(liger_report.get("enabled")),
+                "reason": str(liger_report.get("reason", "runtime")),
+                "detail": str(liger_report.get("detail", "")),
+                "patches": liger_report.get("patches", []),
+            },
+            ensure_ascii=True,
+            separators=(",", ":"),
+        )
     if not args.no_start and not args.check_only:
         configure_service_hosts(webui_host or "127.0.0.1")
         os.environ["GRADIO_SERVER_PORT"] = (

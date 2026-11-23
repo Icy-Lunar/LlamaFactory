@@ -60,6 +60,28 @@ def test_probe_failure_disables_liger_and_is_cached(monkeypatch):
     assert len(calls) == 1
 
 
+def test_preflight_probe_result_is_reused_for_the_matching_dtype(monkeypatch):
+    status = liger.LigerStatus(True, "available", patches=("apply_liger_kernel_to_qwen3",))
+    monkeypatch.setenv(liger.PROBE_RESULT_ENV, liger.serialize_liger_status(status, "bfloat16"))
+    monkeypatch.setattr(liger.subprocess, "run", lambda *args, **kwargs: pytest.fail("Probe must not run twice"))
+    result = liger.get_liger_status("bfloat16")
+    assert result == status
+
+
+def test_preflight_probe_result_is_ignored_for_another_dtype(monkeypatch):
+    status = liger.LigerStatus(True, "available", patches=("apply_liger_kernel_to_qwen3",))
+    monkeypatch.setenv(liger.PROBE_RESULT_ENV, liger.serialize_liger_status(status, "bfloat16"))
+    monkeypatch.setattr(liger.metadata, "version", lambda _: "0.8.0")
+    monkeypatch.setattr(
+        liger.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0, stdout='LIGER_PROBE=["apply_liger_kernel_to_qwen3"]', stderr=""
+        ),
+    )
+    assert liger.get_liger_status("float32").enabled
+
+
 def test_probe_timeout_is_a_fallback_not_a_training_crash(monkeypatch):
     monkeypatch.setattr(liger.metadata, "version", lambda _: "0.8.0")
 

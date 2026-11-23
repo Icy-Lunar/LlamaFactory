@@ -69,6 +69,7 @@ Start cloud training:
 - **AMD GPU Cloud (free credits)**: https://github.com/AMD-AIM/AMD_Developers_Notebooks/blob/main/en/AMD_developer_LLaMAFactory_note_en.md
 
 Read technical notes:
+- **ROCm/WSL stability and SIGSEGV troubleshooting**: [implementation and operations README](ROCM_WSL_FIX_README.md)
 - **Documentation (WIP)**: https://llamafactory.readthedocs.io/en/latest/
 - **Documentation (AMD GPU)**: https://rocm.docs.amd.com/projects/ai-developer-hub/en/latest/notebooks/fine_tune/llama_factory_llama3.html
 - **Documentation (ASCEND NPU)**: https://llamafactory.readthedocs.io/en/latest/multibackend/npu/index.html

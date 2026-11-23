@@ -23,7 +23,7 @@ if ($env:PYTHON_BIN) {
     $launcher = Get-Command py -ErrorAction SilentlyContinue
     if ($launcher) {
         try {
-            $bootstrapPython = & $launcher.Source -3.12 -c "import sys; print(sys.executable)" 2>$null
+            $bootstrapPython = & $launcher.Source -c "import sys; print(sys.executable)" 2>$null
         } catch {
             $bootstrapPython = $null
         }
@@ -31,7 +31,8 @@ if ($env:PYTHON_BIN) {
     if (-not $bootstrapPython) {
         $python = Get-Command python -ErrorAction SilentlyContinue
         if (-not $python) {
-            throw 'Python 3.12 x64 was not found.'
+            & "$PSScriptRoot/scripts/launch_windows.ps1"
+            exit $LASTEXITCODE
         }
         $bootstrapPython = $python.Source
     }
