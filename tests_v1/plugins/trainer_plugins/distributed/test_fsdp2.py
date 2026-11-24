@@ -34,6 +34,7 @@ from llamafactory.v1.plugins.trainer_plugins.distributed import fsdp2 as fsdp2_m
 from llamafactory.v1.plugins.trainer_plugins.distributed.fsdp2 import FSDP2Engine
 from llamafactory.v1.utils.env import find_available_port
 from llamafactory.v1.utils.pytest import dist_env
+from tests.model_fixtures import local_model_path
 
 
 TINY_MODEL = "llamafactory/tiny-random-qwen3"
@@ -136,10 +137,11 @@ def test_fsdp2_meta_loading_buffers_and_tied_weights():
         }
     )
 
-    config = AutoConfig.from_pretrained(TINY_MODEL)
+    model_path = local_model_path(TINY_MODEL)
+    config = AutoConfig.from_pretrained(model_path, local_files_only=True)
 
     # --- NORMAL PATH ---
-    normal_args, *_ = get_args(dict(model=TINY_MODEL, init_config=None))
+    normal_args, *_ = get_args(dict(model=model_path, init_config=None))
     normal_engine = ModelEngine(model_args=normal_args)
     normal_model = normal_engine.model.to(torch.bfloat16)
 
@@ -149,7 +151,7 @@ def test_fsdp2_meta_loading_buffers_and_tied_weights():
     del normal_model
 
     # --- META PATH ---
-    meta_args, *_ = get_args(dict(model=TINY_MODEL, init_config={"name": "init_on_meta"}))
+    meta_args, *_ = get_args(dict(model=model_path, init_config={"name": "init_on_meta"}))
     meta_model_engine = ModelEngine(model_args=meta_args)
     meta_model = meta_model_engine.model
 

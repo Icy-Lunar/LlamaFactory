@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""v1 奖励模型训练器：初始化评分头并优化 chosen/rejected 成对排序目标."""
 
 import torch
 import torch.nn.functional as F

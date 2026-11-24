@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""把多轮监督数据编码为 input/label，并支持普通批处理与多样本 packing."""
+
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Optional
@@ -67,6 +69,7 @@ class SupervisedDatasetProcessor(DatasetProcessor):
         encoded_pairs = self.template.encode_multiturn(self.tokenizer, messages, system, tools, discarding_history_cot)
         total_length = len(input_ids) + (1 if self.template.efficient_eos else 0)
         if self.data_args.mask_history:
+            # 截断预算优先留给最后一轮回答，因此先倒序编码；循环结束后再通过前插恢复原始时间顺序。
             encoded_pairs = encoded_pairs[::-1]  # high priority for last turns
 
         for turn_idx, (source_ids, target_ids) in enumerate(encoded_pairs):
@@ -211,10 +214,13 @@ class PackedSupervisedDatasetProcessor(SupervisedDatasetProcessor):
                     audio_subseq_ids.extend([i] * n_aud)
 
                 if self.data_args.neat_packing:
+                    # 0 留给 padding；同一正整数表示 token 属于同一个子序列，collator 据此生成块对角因果 mask。
                     packed_attention_masks += [i + 1] * len(batch_input_ids[index])  # start from 1
                 else:
                     packed_attention_masks += [1] * len(batch_input_ids[index])
 
+            # 多保留 1 个 token 是为了阻止 FlashAttention 在“恰好全有效”时省略 attention mask；
+            # 该哨兵位的 label 永远为 IGNORE_INDEX，不参与 loss。
             if len(packed_input_ids) < self.data_args.cutoff_len + 1:  # avoid flash_attn drops attn mask
                 pad_length = self.data_args.cutoff_len - len(packed_input_ids) + 1
                 packed_input_ids += [self.tokenizer.pad_token_id] * pad_length

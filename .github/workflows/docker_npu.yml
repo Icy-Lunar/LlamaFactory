@@ -11,6 +11,8 @@ on:
 
 jobs:
   build:
+    # This publication-only workflow targets upstream Docker Hub/Quay accounts.
+    if: github.repository == 'hiyouga/LLaMA-Factory' && (github.event_name != 'release' || !github.event.release.prerelease)
     strategy:
       fail-fast: false
       matrix:

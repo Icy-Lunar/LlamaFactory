@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Route v0 training commands and restart distributed jobs with torchrun when required."""
+
 import os
 import subprocess
 import sys
@@ -22,12 +24,9 @@ USAGE = (
     "-" * 70
     + "\n"
     + "| Usage:                                                             |\n"
-    + "|   llamafactory-cli api -h: launch an OpenAI-style API server       |\n"
-    + "|   llamafactory-cli chat -h: launch a chat interface in CLI         |\n"
     + "|   llamafactory-cli export -h: merge LoRA adapters and export model |\n"
     + "|   llamafactory-cli train -h: train models                          |\n"
-    + "|   llamafactory-cli webchat -h: launch a chat interface in Web UI   |\n"
-    + "|   llamafactory-cli webui: launch LlamaBoard                        |\n"
+    + "|   llamafactory-cli webui: launch Cyrene Yield guided training      |\n"
     + "|   llamafactory-cli env: show environment info                      |\n"
     + "|   llamafactory-cli version: show version info                      |\n"
     + "| Hint: You can use `lmf` as a shortcut for `llamafactory-cli`.      |\n"
@@ -41,25 +40,30 @@ def launch():
     from .extras.misc import find_available_port, get_device_count, is_env_enabled, use_kt, use_ray
 
     logger = logging.get_logger(__name__)
-    WELCOME = (
-        "-" * 58
-        + "\n"
-        + f"| Welcome to LLaMA Factory, version {VERSION}"
-        + " " * (21 - len(VERSION))
-        + "|\n|"
-        + " " * 56
-        + "|\n"
-        + "| Project page: https://github.com/hiyouga/LLaMA-Factory |\n"
-        + "-" * 58
+    welcome_lines = (
+        f"Cyrene Yield Training, version {VERSION}",
+        "",
+        "Project page: https://github.com/DoHorizon-AI/Cyrene-Yield",
+    )
+    welcome_width = max(len(line) for line in welcome_lines) + 4
+    WELCOME = "\n".join(
+        ["-" * welcome_width, *(f"| {line:<{welcome_width - 4}} |" for line in welcome_lines), "-" * welcome_width]
     )
 
     command = sys.argv.pop(1) if len(sys.argv) > 1 else "help"
     if is_env_enabled("USE_MCA") or is_env_enabled("USE_MEGATRON_BRIDGE"):  # force use torchrun
         os.environ["FORCE_TORCHRUN"] = "1"
 
+    # The parent process only builds the torchrun command and re-executes this entry point.
+    # Model and dataset initialization stays in workers so each rank avoids inherited duplicate state.
     if command == "train" and (
         is_env_enabled("FORCE_TORCHRUN") or (get_device_count() > 1 and not use_ray() and not use_kt())
     ):
+        if is_env_enabled("LLAMABOARD_ENABLED"):
+            import faulthandler
+
+            # Workers install their own watchdog. The supervisor only waits for them.
+            faulthandler.cancel_dump_traceback_later()
         # launch distributed training
         nnodes = os.getenv("NNODES", "1")
         node_rank = os.getenv("NODE_RANK", "0")
@@ -133,19 +137,6 @@ def launch():
 
         sys.exit(process.returncode)
 
-    elif command == "api":
-        from .api.app import run_api
-
-        run_api()
-
-    elif command == "chat":
-        from .chat.chat_model import run_chat
-
-        run_chat()
-
-    elif command == "eval":
-        raise NotImplementedError("Evaluation will be deprecated in the future.")
-
     elif command == "export":
         from .train.tuner import export_model
 
@@ -155,11 +146,6 @@ def launch():
         from .train.tuner import run_exp
 
         run_exp()
-
-    elif command == "webchat":
-        from .webui.interface import run_web_demo
-
-        run_web_demo()
 
     elif command == "webui":
         from .webui.interface import run_web_ui
@@ -180,6 +166,9 @@ def launch():
 
 
 if __name__ == "__main__":
+    from llamafactory.extras.diagnostics import enable_diagnostics
+
+    enable_diagnostics()
     from llamafactory.train.tuner import run_exp  # use absolute import
 
     run_exp()

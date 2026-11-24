@@ -276,13 +276,16 @@ llamafactory-cli chat llamafactory_runs/<run_id>/infer.yaml
 3. **Use a non-interactive batch inference script** (preferred). `llamafactory-cli chat` is an **interactive** REPL and cannot be driven in this agent / background environment, so validation is done with a short script (write it into the artifacts dir) that loads `ChatModel` with the **same args as `infer.yaml`** (so it must follow the same LoRA/QLoRA-vs-Full branching — include `adapter_name_or_path` only for LoRA/QLoRA, never for Full) and feeds the test prompts, e.g. for a LoRA/QLoRA run:
    ```python
    from llamafactory.chat import ChatModel
-   chat = ChatModel({
-       "model_name_or_path": "<base_model>",
-       "adapter_name_or_path": "<output_dir>",  # LoRA/QLoRA only — OMIT this key for Full
-       "template": "<template>",
-       "infer_backend": "huggingface",
-       "trust_remote_code": True,
-   })
+
+   chat = ChatModel(
+       {
+           "model_name_or_path": "<base_model>",
+           "adapter_name_or_path": "<output_dir>",  # LoRA/QLoRA only — OMIT this key for Full
+           "template": "<template>",
+           "infer_backend": "huggingface",
+           "trust_remote_code": True,
+       }
+   )
    for q in ["你是谁？", "Who are you?"]:
        print(q, "->", chat.chat([{"role": "user", "content": q}])[0].response_text)
    ```

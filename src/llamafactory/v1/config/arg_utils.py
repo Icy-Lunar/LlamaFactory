@@ -47,7 +47,6 @@ class ModelClass(StrEnum):
 @unique
 class SampleBackend(StrEnum):
     HF = "hf"
-    VLLM = "vllm"
 
 
 @unique

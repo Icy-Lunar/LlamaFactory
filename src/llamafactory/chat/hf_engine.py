@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Implement local chat, streaming generation, and scoring with Transformers generate."""
+
 import asyncio
 import os
 from collections.abc import AsyncGenerator, Callable

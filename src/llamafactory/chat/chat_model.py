@@ -15,14 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Provide synchronous, asynchronous, and streaming chat with Hugging Face Transformers."""
+
 import asyncio
-import os
 from collections.abc import AsyncGenerator, Generator
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Optional
 
-from ..extras.constants import EngineName
-from ..extras.misc import torch_gc
 from ..hparams import get_infer_args
 
 
@@ -37,7 +36,7 @@ def _start_background_loop(loop: "asyncio.AbstractEventLoop") -> None:
 
 
 class ChatModel:
-    r"""General class for chat models. Backed by huggingface or vllm engines.
+    r"""Hugging Face Transformers chat model.
 
     Supports both sync and async methods.
     Sync methods: chat(), stream_chat() and get_scores().
@@ -47,36 +46,23 @@ class ChatModel:
     def __init__(self, args: Optional[dict[str, Any]] = None) -> None:
         model_args, data_args, finetuning_args, generating_args = get_infer_args(args)
 
-        if model_args.infer_backend == EngineName.HF:
-            from .hf_engine import HuggingfaceEngine
+        from .hf_engine import HuggingfaceEngine
 
-            self.engine: BaseEngine = HuggingfaceEngine(model_args, data_args, finetuning_args, generating_args)
-        elif model_args.infer_backend == EngineName.VLLM:
-            try:
-                from .vllm_engine import VllmEngine
-
-                self.engine: BaseEngine = VllmEngine(model_args, data_args, finetuning_args, generating_args)
-            except ImportError as e:
-                raise ImportError(
-                    "vLLM not install, you may need to run `pip install vllm`\n"
-                    "or try to use HuggingFace backend: --infer_backend huggingface"
-                ) from e
-        elif model_args.infer_backend == EngineName.SGLANG:
-            try:
-                from .sglang_engine import SGLangEngine
-
-                self.engine: BaseEngine = SGLangEngine(model_args, data_args, finetuning_args, generating_args)
-            except ImportError as e:
-                raise ImportError(
-                    "SGLang not install, you may need to run `pip install sglang[all]`\n"
-                    "or try to use HuggingFace backend: --infer_backend huggingface"
-                ) from e
-        else:
-            raise NotImplementedError(f"Unknown backend: {model_args.infer_backend}")
-
+        self.engine: BaseEngine = HuggingfaceEngine(model_args, data_args, finetuning_args, generating_args)
         self._loop = asyncio.new_event_loop()
         self._thread = Thread(target=_start_background_loop, args=(self._loop,), daemon=True)
         self._thread.start()
+
+    def close(self) -> None:
+        r"""Stop the synchronous bridge loop after unloading the model."""
+        loop = getattr(self, "_loop", None)
+        thread = getattr(self, "_thread", None)
+        if loop is not None and loop.is_running():
+            loop.call_soon_threadsafe(loop.stop)
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=2)
+        if loop is not None and not loop.is_closed():
+            loop.close()
 
     def chat(
         self,
@@ -158,43 +144,3 @@ class ChatModel:
     ) -> list[float]:
         r"""Asynchronously get a list of scores of the reward model."""
         return await self.engine.get_scores(batch_input, **input_kwargs)
-
-
-def run_chat() -> None:
-    if os.name != "nt":
-        try:
-            import readline  # noqa: F401
-        except ImportError:
-            print("Install `readline` for a better experience.")
-
-    chat_model = ChatModel()
-    messages = []
-    print("Welcome to the CLI application, use `clear` to remove the history, use `exit` to exit the application.")
-
-    while True:
-        try:
-            query = input("\nUser: ")
-        except UnicodeDecodeError:
-            print("Detected decoding error at the inputs, please set the terminal encoding to utf-8.")
-            continue
-        except Exception:
-            raise
-
-        if query.strip() == "exit":
-            break
-
-        if query.strip() == "clear":
-            messages = []
-            torch_gc()
-            print("History has been removed.")
-            continue
-
-        messages.append({"role": "user", "content": query})
-        print("Assistant: ", end="", flush=True)
-
-        response = ""
-        for new_text in chat_model.stream_chat(messages):
-            print(new_text, end="", flush=True)
-            response += new_text
-        print()
-        messages.append({"role": "assistant", "content": response})

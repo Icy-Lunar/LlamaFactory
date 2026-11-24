@@ -24,8 +24,7 @@ Dataset 中的一条原始记录 + DatasetInfo.converter
 
 ```python
 @DataLoaderPlugin("example").register()
-def load_example(path, split, streaming):
-    ...
+def load_example(path, split, streaming): ...
 ```
 
 当前注册的 `local` 根据文件扩展名选择 Hugging Face dataset builder，再加载文件或目录。Hub 数据由 DataEngine 直接分派，当前没有通过一个名为 `hf_hub` 的 loader 注册项加载。

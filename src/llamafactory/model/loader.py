@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Load local tokenizer, processor, model weights, compatibility patches, and adapters."""
+
 import os
 from typing import TYPE_CHECKING, Any, Optional, TypedDict
 
@@ -28,7 +30,8 @@ from transformers import (
 from trl import AutoModelForCausalLMWithValueHead
 
 from ..extras import logging
-from ..extras.misc import count_parameters, skip_check_imports, try_download_model_from_other_hub
+from ..extras.diagnostics import stage
+from ..extras.misc import count_parameters, skip_check_imports
 from ..extras.packages import is_torch_version_greater_than
 from .adapter import init_adapter
 from .model_utils.liger_kernel import apply_liger_kernel
@@ -59,13 +62,14 @@ def _get_init_kwargs(model_args: "ModelArguments") -> dict[str, Any]:
     Note: including inplace operation of model_args.
     """
     skip_check_imports()
-    model_args.model_name_or_path = try_download_model_from_other_hub(model_args)
+    model_path = os.path.abspath(os.path.expanduser(model_args.model_name_or_path))
+    if not os.path.isdir(model_path):
+        raise ValueError("`model_name_or_path` must be an existing local model directory.")
 
+    model_args.model_name_or_path = model_path
     return {
         "trust_remote_code": model_args.trust_remote_code,
-        "cache_dir": model_args.cache_dir,
-        "revision": model_args.model_revision,
-        "token": model_args.hf_hub_token,
+        "local_files_only": True,
     }
 
 
@@ -74,6 +78,7 @@ def load_tokenizer(model_args: "ModelArguments") -> "TokenizerModule":
 
     Note: including inplace operation of model_args.
     """
+    stage("tokenizer")
     init_kwargs = _get_init_kwargs(model_args)
     try:
         tokenizer = AutoTokenizer.from_pretrained(
@@ -143,11 +148,14 @@ def load_model(
     add_valuehead: bool = False,
 ) -> "PreTrainedModel":
     r"""Load pretrained model."""
+    # Configuration patches determine quantization, attention, and device loading before model creation.
     init_kwargs = _get_init_kwargs(model_args)
+    stage("model_config")
     config = load_config(model_args)
     patch_config(config, tokenizer, model_args, init_kwargs, is_trainable)
     apply_liger_kernel(config, model_args, is_trainable, require_logits=(finetuning_args.stage not in ["pt", "sft"]))
 
+    stage("weights")
     model = None
     if model_args.use_unsloth:
         if model_args.adapter_name_or_path is not None:
@@ -163,6 +171,7 @@ def load_model(
         if model_args.mixture_of_depths == "load":
             model = load_mod_pretrained_model(**init_kwargs)
         else:
+            # Select the AutoClass from the config type so local directory names do not affect dispatch.
             if type(config) in AutoModelForImageTextToText._model_mapping.keys():  # image-text
                 load_class = AutoModelForImageTextToText
             elif type(config) in AutoModelForSeq2SeqLM._model_mapping.keys():  # audio-text
@@ -185,6 +194,7 @@ def load_model(
     patch_model(model, tokenizer, model_args, is_trainable, add_valuehead)
     register_autoclass(config, model, tokenizer)
 
+    stage("adapters")
     model = init_adapter(config, model, model_args, finetuning_args, is_trainable)
 
     if add_valuehead:
@@ -252,4 +262,5 @@ def load_model(
         for name, param in model.named_parameters():
             print(f"name: {name}, dtype: {param.dtype}, device: {param.device}, trainable: {param.requires_grad}")
 
+    stage("model_ready")
     return model

@@ -15,12 +15,11 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel, PreTrainedTokenizer
-    from vllm import AsyncLLMEngine
 
     from ..data import Template
     from ..data.mm_plugin import AudioInput, ImageInput, VideoInput
@@ -43,7 +42,7 @@ class BaseEngine(ABC):
     """
 
     name: "EngineName"
-    model: Union["PreTrainedModel", "AsyncLLMEngine"]
+    model: "PreTrainedModel"
     tokenizer: "PreTrainedTokenizer"
     can_generate: bool
     template: "Template"

@@ -1,4 +1,4 @@
-# Copyright 2025 the LlamaFactory team.
+# Copyright 2026 the LlamaFactory team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,26 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-import os
+"""Hugging Face-only model chat controller for the guided WebUI."""
+
 from collections.abc import Generator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from transformers.utils import is_torch_npu_available
 
 from ..chat import ChatModel
 from ..data import Role
-from ..extras.constants import PEFT_METHODS
 from ..extras.misc import torch_gc
 from ..extras.packages import is_gradio_available
-from .common import get_save_dir, load_config
+from .chat_locales import CHAT_ALERTS
 from .locales import ALERTS
 
 
 if TYPE_CHECKING:
     from ..chat import BaseEngine
-    from .manager import Manager
 
 
 if is_gradio_available():
@@ -39,15 +38,10 @@ if is_gradio_available():
 
 
 def _escape_html(text: str) -> str:
-    r"""Escape HTML characters."""
     return text.replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _format_response(text: str, lang: str, escape_html: bool, thought_words: tuple[str, str]) -> str:
-    r"""Post-process the response text.
-
-    Based on: https://huggingface.co/spaces/Lyte/DeepSeek-R1-Distill-Qwen-1.5B-Demo-GGUF/blob/main/app.py
-    """
     if thought_words[0] not in text:
         return _escape_html(text) if escape_html else text
 
@@ -73,100 +67,90 @@ def _format_response(text: str, lang: str, escape_html: bool, thought_words: tup
 def update_attr(obj: Any, name: str, value: Any):
     old_value = getattr(obj, name, None)
     setattr(obj, name, value)
-    yield
-    setattr(obj, name, old_value)
+    try:
+        yield
+    finally:
+        setattr(obj, name, old_value)
 
 
 class WebChatModel(ChatModel):
-    def __init__(self, manager: "Manager", demo_mode: bool = False, lazy_init: bool = True) -> None:
-        self.manager = manager
+    def __init__(self, demo_mode: bool = False) -> None:
         self.demo_mode = demo_mode
         self.engine: BaseEngine | None = None
-
-        if not lazy_init:  # read arguments from command line
-            super().__init__()
-
-        if demo_mode and os.getenv("DEMO_MODEL") and os.getenv("DEMO_TEMPLATE"):  # load demo model
-            model_name_or_path = os.getenv("DEMO_MODEL")
-            template = os.getenv("DEMO_TEMPLATE")
-            infer_backend = os.getenv("DEMO_BACKEND", "huggingface")
-            super().__init__(
-                dict(model_name_or_path=model_name_or_path, template=template, infer_backend=infer_backend)
-            )
 
     @property
     def loaded(self) -> bool:
         return self.engine is not None
 
-    def load_model(self, data) -> Generator[str, None, None]:
-        get = lambda elem_id: data[self.manager.get_elem_by_id(elem_id)]
-        lang, model_name, model_path = get("top.lang"), get("top.model_name"), get("top.model_path")
-        finetuning_type, checkpoint_path = get("top.finetuning_type"), get("top.checkpoint_path")
-        user_config = load_config()
-
-        error = ""
+    def load_model(
+        self,
+        lang: str,
+        model_path: str,
+        adapter_path: str,
+        quantization_bit: str,
+        infer_dtype: str,
+    ) -> Generator[str, None, None]:
         if self.loaded:
-            error = ALERTS["err_exists"][lang]
-        elif not model_name:
-            error = ALERTS["err_no_model"][lang]
-        elif not model_path:
-            error = ALERTS["err_no_path"][lang]
-        elif self.demo_mode:
-            error = ALERTS["err_demo"][lang]
-
-        try:
-            json.loads(get("infer.extra_args"))
-        except json.JSONDecodeError:
-            error = ALERTS["err_json_schema"][lang]
-
-        if error:
-            gr.Warning(error)
-            yield error
+            message = CHAT_ALERTS["already_loaded"][lang]
+            gr.Warning(message)
+            yield message
             return
 
-        yield ALERTS["info_loading"][lang]
-        args = dict(
-            model_name_or_path=model_path,
-            cache_dir=user_config.get("cache_dir", None),
-            finetuning_type=finetuning_type,
-            template=get("top.template"),
-            rope_scaling=get("top.rope_scaling") if get("top.rope_scaling") != "none" else None,
-            flash_attn="fa2" if get("top.booster") == "flashattn2" else "auto",
-            use_unsloth=(get("top.booster") == "unsloth"),
-            enable_liger_kernel=(get("top.booster") == "liger_kernel"),
-            infer_backend=get("infer.infer_backend"),
-            infer_dtype=get("infer.infer_dtype"),
-            trust_remote_code=True,
-        )
-        args.update(json.loads(get("infer.extra_args")))
+        local_model = Path(model_path).expanduser()
+        if not model_path or not local_model.is_dir():
+            message = CHAT_ALERTS["model_missing"][lang]
+            gr.Warning(message)
+            yield message
+            return
 
-        # checkpoints
-        if checkpoint_path:
-            if finetuning_type in PEFT_METHODS:  # list
-                args["adapter_name_or_path"] = ",".join(
-                    [get_save_dir(model_name, finetuning_type, adapter) for adapter in checkpoint_path]
-                )
-            else:  # str
-                args["model_name_or_path"] = get_save_dir(model_name, finetuning_type, checkpoint_path)
-
-        # quantization
-        if get("top.quantization_bit") != "none":
-            args["quantization_bit"] = int(get("top.quantization_bit"))
-            args["quantization_method"] = get("top.quantization_method")
-            args["double_quantization"] = not is_torch_npu_available()
-
-        super().__init__(args)
-        yield ALERTS["info_loaded"][lang]
-
-    def unload_model(self, data) -> Generator[str, None, None]:
-        lang = data[self.manager.get_elem_by_id("top.lang")]
+        local_adapter = Path(adapter_path).expanduser() if adapter_path else None
+        if local_adapter is not None and not local_adapter.is_dir():
+            message = CHAT_ALERTS["adapter_missing"][lang]
+            gr.Warning(message)
+            yield message
+            return
 
         if self.demo_mode:
             gr.Warning(ALERTS["err_demo"][lang])
             yield ALERTS["err_demo"][lang]
             return
 
+        yield ALERTS["info_loading"][lang]
+        args = {
+            "model_name_or_path": str(local_model.resolve()),
+            "adapter_name_or_path": str(local_adapter.resolve()) if local_adapter else None,
+            "finetuning_type": "lora",
+            "template": "default",
+            "infer_dtype": infer_dtype,
+            "trust_remote_code": True,
+        }
+        if quantization_bit != "none":
+            args.update(
+                quantization_bit=int(quantization_bit),
+                quantization_method="bnb",
+                double_quantization=not is_torch_npu_available(),
+            )
+
+        try:
+            super().__init__(args)
+        except Exception as error:
+            self.engine = None
+            torch_gc()
+            message = CHAT_ALERTS["load_failed"][lang].format(error=error)
+            gr.Warning(message)
+            yield message
+            return
+
+        yield ALERTS["info_loaded"][lang]
+
+    def unload_model(self, lang: str) -> Generator[str, None, None]:
+        if self.demo_mode:
+            gr.Warning(ALERTS["err_demo"][lang])
+            yield ALERTS["err_demo"][lang]
+            return
+
         yield ALERTS["info_unloading"][lang]
+        self.close()
         self.engine = None
         torch_gc()
         yield ALERTS["info_unloaded"][lang]
@@ -175,18 +159,16 @@ class WebChatModel(ChatModel):
     def append(
         chatbot: list[dict[str, str]],
         messages: list[dict[str, str]],
-        role: str,
+        lang: str,
         query: str,
         escape_html: bool,
     ) -> tuple[list[dict[str, str]], list[dict[str, str]], str]:
-        r"""Add the user input to chatbot.
-
-        Inputs: infer.chatbot, infer.messages, infer.role, infer.query, infer.escape_html
-        Output: infer.chatbot, infer.messages, infer.query
-        """
+        if not query.strip():
+            gr.Warning(CHAT_ALERTS["empty_query"][lang])
+            return chatbot, messages, query
         return (
             chatbot + [{"role": "user", "content": _escape_html(query) if escape_html else query}],
-            messages + [{"role": role, "content": query}],
+            messages + [{"role": Role.USER.value, "content": query}],
             "",
         )
 
@@ -196,53 +178,34 @@ class WebChatModel(ChatModel):
         messages: list[dict[str, str]],
         lang: str,
         system: str,
-        tools: str,
-        image: Any | None,
-        video: Any | None,
-        audio: Any | None,
         max_new_tokens: int,
         top_p: float,
         temperature: float,
         seed: float | int,
-        skip_special_tokens: bool,
         escape_html: bool,
         enable_thinking: bool,
     ) -> Generator[tuple[list[dict[str, str]], list[dict[str, str]]], None, None]:
-        r"""Generate output text in stream.
+        if not self.loaded:
+            gr.Warning(CHAT_ALERTS["not_loaded"][lang])
+            yield chatbot, messages
+            return
 
-        Inputs: infer.chatbot, infer.messages, infer.system, infer.tools, infer.image, infer.video, ...
-        Output: infer.chatbot, infer.messages
-        """
         with update_attr(self.engine.template, "enable_thinking", enable_thinking):
             chatbot.append({"role": "assistant", "content": ""})
             response = ""
             for new_text in self.stream_chat(
                 messages,
-                system,
-                tools,
-                images=[image] if image else None,
-                videos=[video] if video else None,
-                audios=[audio] if audio else None,
+                system=system or None,
                 max_new_tokens=max_new_tokens,
                 top_p=top_p,
                 temperature=temperature,
-                seed=None if seed is None or int(seed) < 0 else int(seed),
-                skip_special_tokens=skip_special_tokens,
+                seed=None if int(seed) < 0 else int(seed),
+                skip_special_tokens=True,
             ):
                 response += new_text
-                if tools:
-                    result = self.engine.template.extract_tool(response)
-                else:
-                    result = response
-
-                if isinstance(result, list):
-                    tool_calls = [{"name": tool.name, "arguments": json.loads(tool.arguments)} for tool in result]
-                    tool_calls = json.dumps(tool_calls, ensure_ascii=False)
-                    output_messages = messages + [{"role": Role.FUNCTION.value, "content": tool_calls}]
-                    bot_text = "```json\n" + tool_calls + "\n```"
-                else:
-                    output_messages = messages + [{"role": Role.ASSISTANT.value, "content": result}]
-                    bot_text = _format_response(result, lang, escape_html, self.engine.template.thought_words)
-
-                chatbot[-1] = {"role": "assistant", "content": bot_text}
+                output_messages = messages + [{"role": Role.ASSISTANT.value, "content": response}]
+                chatbot[-1] = {
+                    "role": "assistant",
+                    "content": _format_response(response, lang, escape_html, self.engine.template.thought_words),
+                }
                 yield chatbot, output_messages

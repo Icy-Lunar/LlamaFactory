@@ -29,6 +29,7 @@ except ImportError:
 
 from llamafactory.extras.packages import is_transformers_version_greater_than
 from llamafactory.train.test_utils import load_infer_model
+from tests.model_fixtures import local_model_args
 
 
 TINY_LLAMA3 = os.getenv("TINY_LLAMA3", "llamafactory/tiny-random-Llama-3")
@@ -54,7 +55,7 @@ def test_attention():
         "fa2": "LlamaFlashAttention2",
     }
     for requested_attention in attention_available:
-        model = load_infer_model(flash_attn=requested_attention, **INFER_ARGS)
+        model = load_infer_model(flash_attn=requested_attention, **local_model_args(INFER_ARGS))
         for module in model.modules():
             if "Attention" in module.__class__.__name__:
                 assert module.__class__.__name__ == llama_attention_classes[requested_attention]

@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+"""把 Alpaca、ShareGPT 和 OpenAI 等数据协议对齐为内部统一的消息与多模态字段."""
+
 import json
 import os
 from abc import abstractmethod
@@ -407,9 +410,12 @@ def align_dataset(
     _videos: []
     _audios: []
     """
+    # map 后只保留统一字段，先记录原始列名可以避免不同协议的辅助列泄漏到下游 collator。
     column_names = list(next(iter(dataset)).keys())
     kwargs = {}
     if not data_args.streaming:
+        # 非主进程始终允许读取已有缓存；主进程在 overwrite_cache 时负责重新生成缓存。
+        # 流式数据无法预先物化，因此不能使用多进程 map 和磁盘缓存参数。
         kwargs = dict(
             num_proc=data_args.preprocessing_num_workers,
             load_from_cache_file=(not data_args.overwrite_cache) or (training_args.local_process_index != 0),

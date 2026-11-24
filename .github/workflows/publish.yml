@@ -9,6 +9,8 @@ on:
 jobs:
   publish:
     name: Upload release to PyPI
+    # Fork deployment previews must never publish the upstream PyPI project.
+    if: github.repository == 'hiyouga/LLaMA-Factory' && (github.event_name != 'release' || !github.event.release.prerelease)
 
     runs-on: ubuntu-latest
 

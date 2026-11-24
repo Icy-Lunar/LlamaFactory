@@ -14,12 +14,10 @@
 
 import json
 import os
-import signal
-from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
-from psutil import Process
+from psutil import NoSuchProcess, Process, wait_procs
 from yaml import safe_dump, safe_load
 
 from ..extras import logging
@@ -27,11 +25,8 @@ from ..extras.constants import (
     DATA_CONFIG,
     DEFAULT_TEMPLATE,
     MULTIMODAL_SUPPORTED_MODELS,
-    SUPPORTED_MODELS,
     TRAINING_ARGS,
-    DownloadSource,
 )
-from ..extras.misc import use_modelscope, use_openmind
 
 
 logger = logging.get_logger(__name__)
@@ -44,22 +39,29 @@ USER_CONFIG = "user_config.yaml"
 
 
 def abort_process(pid: int) -> None:
-    r"""Abort the processes recursively in a bottom-up way."""
+    r"""Stop only this job's process tree, escalating after a bounded grace period."""
     try:
-        children = Process(pid).children()
-        if children:
-            for child in children:
-                abort_process(child.pid)
-
-        os.kill(pid, signal.SIGABRT)
-    except Exception:
-        pass
+        parent = Process(pid)
+        processes = list(reversed(parent.children(recursive=True))) + [parent]
+    except NoSuchProcess:
+        return
+    for process in processes:
+        try:
+            process.terminate()
+        except NoSuchProcess:
+            pass
+    _, alive = wait_procs(processes, timeout=3)
+    for process in alive:
+        try:
+            process.kill()
+        except NoSuchProcess:
+            pass
 
 
 def get_save_dir(*paths: str) -> os.PathLike:
     r"""Get the path to saved model checkpoints."""
     if os.path.sep in paths[-1]:
-        logger.warning_rank0("Found complex path, some features may be not available.")
+        # Absolute/custom local directories are supported, not an error condition.
         return paths[-1]
 
     paths = (path.replace(" ", "").strip() for path in paths)
@@ -73,53 +75,38 @@ def _get_config_path() -> os.PathLike:
 
 def load_config() -> dict[str, str | dict[str, Any]]:
     r"""Load user config if exists."""
+    defaults = {"lang": None, "last_model": None, "last_model_path": None, "cache_dir": None}
     try:
         with open(_get_config_path(), encoding="utf-8") as f:
-            return safe_load(f)
+            loaded = safe_load(f)
     except Exception:
-        return {"lang": None, "hub_name": None, "last_model": None, "path_dict": {}, "cache_dir": None}
+        return defaults
+
+    if not isinstance(loaded, dict):
+        return defaults
+
+    defaults.update(loaded)
+    if not defaults["last_model_path"] and defaults.get("last_model") and isinstance(defaults.get("path_dict"), dict):
+        defaults["last_model_path"] = defaults["path_dict"].get(defaults["last_model"])
+
+    defaults.pop("hub_name", None)
+    defaults.pop("path_dict", None)
+    return defaults
 
 
-def save_config(
-    lang: str, hub_name: str | None = None, model_name: str | None = None, model_path: str | None = None
-) -> None:
+def save_config(lang: str, model_name: str | None = None, model_path: str | None = None) -> None:
     r"""Save user config."""
     os.makedirs(DEFAULT_CACHE_DIR, exist_ok=True)
     user_config = load_config()
     user_config["lang"] = lang or user_config["lang"]
-    if hub_name:
-        user_config["hub_name"] = hub_name
-
     if model_name:
         user_config["last_model"] = model_name
 
-    if model_name and model_path:
-        user_config["path_dict"][model_name] = model_path
+    if model_path:
+        user_config["last_model_path"] = model_path
 
     with open(_get_config_path(), "w", encoding="utf-8") as f:
         safe_dump(user_config, f)
-
-
-def get_model_path(model_name: str) -> str:
-    r"""Get the model path according to the model name."""
-    user_config = load_config()
-    path_dict: dict[DownloadSource, str] = SUPPORTED_MODELS.get(model_name, defaultdict(str))
-    model_path = user_config["path_dict"].get(model_name, "") or path_dict.get(DownloadSource.DEFAULT, "")
-    if (
-        use_modelscope()
-        and path_dict.get(DownloadSource.MODELSCOPE)
-        and model_path == path_dict.get(DownloadSource.DEFAULT)
-    ):  # replace hf path with ms path
-        model_path = path_dict.get(DownloadSource.MODELSCOPE)
-
-    if (
-        use_openmind()
-        and path_dict.get(DownloadSource.OPENMIND)
-        and model_path == path_dict.get(DownloadSource.DEFAULT)
-    ):  # replace hf path with om path
-        model_path = path_dict.get(DownloadSource.OPENMIND)
-
-    return model_path
 
 
 def get_template(model_name: str) -> str:
@@ -155,7 +142,8 @@ def load_args(config_path: str) -> dict[str, Any] | None:
     r"""Load the training configuration from config path."""
     try:
         with open(config_path, encoding="utf-8") as f:
-            return safe_load(f)
+            value = safe_load(f)
+            return value if isinstance(value, dict) else None
     except Exception:
         return None
 
@@ -207,14 +195,6 @@ def save_cmd(args: dict[str, Any]) -> str:
         safe_dump(_clean_cmd(args), f)
 
     return os.path.join(output_dir, TRAINING_ARGS)
-
-
-def load_eval_results(path: os.PathLike) -> str:
-    r"""Get scores after evaluation."""
-    with open(path, encoding="utf-8") as f:
-        result = json.dumps(json.load(f), indent=4)
-
-    return f"```json\n{result}\n```\n"
 
 
 def calculate_pixels(pixels: str) -> int:

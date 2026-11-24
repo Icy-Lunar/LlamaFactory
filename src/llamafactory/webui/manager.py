@@ -50,6 +50,10 @@ class Manager:
         """
         return self._id_to_elem[elem_id]
 
+    def has_elem(self, elem_id: str) -> bool:
+        r"""Return whether an element is registered."""
+        return elem_id in self._id_to_elem
+
     def get_id_by_elem(self, elem: "Component") -> str:
         r"""Get id by element."""
         return self._elem_to_id[elem]

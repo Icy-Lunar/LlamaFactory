@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""v0 训练总编排器：安装回调，并按训练阶段和分布式后端路由到具体 workflow."""
+
 import os
 import shutil
 from typing import TYPE_CHECKING, Any, Optional
@@ -23,6 +25,7 @@ from transformers import EarlyStoppingCallback, PreTrainedModel
 from ..data import get_template_and_fix_tokenizer
 from ..extras import logging
 from ..extras.constants import V_HEAD_SAFE_WEIGHTS_NAME, V_HEAD_WEIGHTS_NAME
+from ..extras.diagnostics import configure_rocm_wsl_environment, is_rocm_wsl, stage
 from ..extras.misc import find_available_port, get_device_name, get_torch_device, infer_optim_dtype
 from ..extras.packages import (
     is_hyper_parallel_available,
@@ -35,6 +38,7 @@ from ..hparams import RayArguments, get_infer_args, get_ray_args, get_train_args
 from ..model import load_model, load_tokenizer
 from .callbacks import (
     LogCallback,
+    MemoryCalibrationCallback,
     ModuleProfilerCallback,
     PissaConvertCallback,
     ReporterCallback,
@@ -69,9 +73,30 @@ logger = logging.get_logger(__name__)
 def _training_function(config: dict[str, Any]) -> None:
     args = config.get("args")
     callbacks: list[Any] = config.get("callbacks")
+    if is_rocm_wsl():
+        configure_rocm_wsl_environment(os.environ)
+        stage("device_check")
+        torch.set_num_threads(1)
+        if not torch.cuda.is_available():
+            raise RuntimeError("ROCm/WSL GPU unavailable; check the Windows AMD driver and /dev/dxg. No CPU fallback.")
+        probe = torch.ones(1, device="cuda")
+        (probe + 1).sum().item()
+        torch.cuda.synchronize()
+        del probe
+    stage("arguments")
     model_args, data_args, training_args, finetuning_args, generating_args = get_train_args(args)
+    if is_rocm_wsl():
+        # Datasets uses multiprocess/fork on Linux; avoid inheriting HIP/OpenMP locks.
+        data_args.preprocessing_num_workers = 1
+        training_args.dataloader_num_workers = 0
+        training_args.dataloader_pin_memory = False
+        logger.warning_rank0(
+            "ROCm/WSL safety: synchronous weight loading, sequential preprocessing, zero DataLoader workers, "
+            "and no pinned memory."
+        )
 
     callbacks.append(LogCallback())
+    callbacks.append(MemoryCalibrationCallback())
     if finetuning_args.pissa_convert:
         callbacks.append(PissaConvertCallback())
 
@@ -89,6 +114,7 @@ def _training_function(config: dict[str, Any]) -> None:
 
     callbacks.append(ReporterCallback(model_args, data_args, finetuning_args, generating_args))  # add to last
 
+    # 后端分支必须先于普通 stage 分支：同一个 pt/sft 任务只能由一个训练栈接管，避免重复初始化进程组。
     if finetuning_args.stage in ["pt", "sft"] and finetuning_args.use_hyper_parallel:
         if not is_hyper_parallel_available():
             raise ImportError("hyper_parallel is not installed. Please install it with `pip install hyper_parallel`.")

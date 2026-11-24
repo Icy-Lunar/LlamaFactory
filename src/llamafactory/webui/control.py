@@ -14,6 +14,7 @@
 
 import json
 import os
+from html import escape
 from typing import Any
 
 from transformers.trainer_utils import get_last_checkpoint
@@ -27,24 +28,15 @@ from ..extras.constants import (
     TRAINER_LOG,
     TRAINING_STAGES,
 )
+from ..extras.diagnostics import tail
 from ..extras.packages import is_gradio_available, is_matplotlib_available
 from ..extras.ploting import gen_loss_plot
-from ..model import QuantizationMethod
-from .common import DEFAULT_CONFIG_DIR, DEFAULT_DATA_DIR, get_model_path, get_save_dir, get_template, load_dataset_info
+from .common import DEFAULT_CONFIG_DIR, DEFAULT_DATA_DIR, get_save_dir, get_template, load_dataset_info
 from .locales import ALERTS
 
 
 if is_gradio_available():
     import gradio as gr
-
-
-def switch_hub(hub_name: str) -> None:
-    r"""Switch model hub.
-
-    Inputs: top.hub_name
-    """
-    os.environ["USE_MODELSCOPE_HUB"] = "1" if hub_name == "modelscope" else "0"
-    os.environ["USE_OPENMIND_HUB"] = "1" if hub_name == "openmind" else "0"
 
 
 def can_quantize(finetuning_type: str) -> "gr.Dropdown":
@@ -59,20 +51,20 @@ def can_quantize(finetuning_type: str) -> "gr.Dropdown":
         return gr.Dropdown(interactive=True)
 
 
-def can_quantize_to(quantization_method: str) -> "gr.Dropdown":
+def can_quantize_to(
+    quantization_method: str, quantization_bit: str = "none", finetuning_type: str = "lora"
+) -> "gr.Dropdown":
     r"""Get the available quantization bits.
 
-    Inputs: top.quantization_method
+    Inputs: top.quantization_method, top.quantization_bit, top.finetuning_type
     Outputs: top.quantization_bit
     """
-    if quantization_method == QuantizationMethod.BNB:
-        available_bits = ["none", "8", "4"]
-    elif quantization_method == QuantizationMethod.HQQ:
-        available_bits = ["none", "8", "6", "5", "4", "3", "2", "1"]
-    elif quantization_method == QuantizationMethod.EETQ:
-        available_bits = ["none", "8"]
+    # The guided product has one quantization backend, including restored configurations.
+    available_bits = ["none", "8", "4"]
 
-    return gr.Dropdown(choices=available_bits)
+    interactive = finetuning_type in PEFT_METHODS
+    selected_bit = quantization_bit if interactive and quantization_bit in available_bits else "none"
+    return gr.Dropdown(value=selected_bit, interactive=interactive)
 
 
 def change_stage(training_stage: str = list(TRAINING_STAGES.keys())[0]) -> tuple[list[str], bool]:
@@ -84,13 +76,13 @@ def change_stage(training_stage: str = list(TRAINING_STAGES.keys())[0]) -> tuple
     return [], TRAINING_STAGES[training_stage] == "pt"
 
 
-def get_model_info(model_name: str) -> tuple[str, str]:
-    r"""Get the necessary information of this model.
+def get_local_model_info(model_path: str) -> tuple[str, str]:
+    r"""Infer the display name and conversation template from a local model directory."""
+    if not model_path or not os.path.isdir(os.path.abspath(os.path.expanduser(model_path))):
+        return "", "default"
 
-    Inputs: top.model_name
-    Outputs: top.model_path, top.template
-    """
-    return get_model_path(model_name), get_template(model_name)
+    model_name = os.path.basename(os.path.normpath(model_path))
+    return model_name, get_template(model_name)
 
 
 def check_template(lang: str, template: str) -> None:
@@ -104,35 +96,35 @@ def check_template(lang: str, template: str) -> None:
         gr.Warning(ALERTS["warn_no_instruct"][lang])
 
 
-def get_trainer_info(lang: str, output_path: os.PathLike, do_train: bool) -> tuple[str, "gr.Slider", dict[str, Any]]:
-    r"""Get training information for monitor.
-
-    If do_train is True:
-        Inputs: top.lang, train.output_path
-        Outputs: train.output_box, train.progress_bar, train.loss_viewer, train.swanlab_link
-    If do_train is False:
-        Inputs: top.lang, eval.output_path
-        Outputs: eval.output_box, eval.progress_bar, None, None
-    """
+def get_trainer_info(lang: str, output_path: os.PathLike) -> tuple[str, "gr.Slider", dict[str, Any]]:
+    r"""Get training information for the progress monitor."""
     running_log = ""
     running_progress = gr.Slider(visible=False)
     running_info = {}
 
-    running_log_path = os.path.join(output_path, RUNNING_LOG)
+    running_log_path = os.path.join(output_path, "webui_subprocess.log")
+    if not os.path.isfile(running_log_path):
+        running_log_path = os.path.join(output_path, RUNNING_LOG)
     if os.path.isfile(running_log_path):
-        with open(running_log_path, encoding="utf-8") as f:
-            running_log = "```\n" + f.read()[-20000:] + "\n```\n"  # avoid lengthy log
+        running_log = f"<pre>{escape(tail(running_log_path))}</pre>"
 
     trainer_log_path = os.path.join(output_path, TRAINER_LOG)
     if os.path.isfile(trainer_log_path):
         trainer_log: list[dict[str, Any]] = []
-        with open(trainer_log_path, encoding="utf-8") as f:
-            for line in f:
-                trainer_log.append(json.loads(line))
+        for line in tail(trainer_log_path, 256000).splitlines():
+            try:
+                item = json.loads(line)
+                if isinstance(item, dict) and all(
+                    key in item
+                    for key in ("percentage", "current_steps", "total_steps", "elapsed_time", "remaining_time")
+                ):
+                    trainer_log.append(item)
+            except (ValueError, TypeError):
+                continue  # Writer may be midway through appending the last JSON record.
 
         if len(trainer_log) != 0:
             latest_log = trainer_log[-1]
-            percentage = latest_log["percentage"]
+            percentage = min(100, max(0, latest_log["percentage"]))
             label = "Running {:d}/{:d}: {} < {}".format(
                 latest_log["current_steps"],
                 latest_log["total_steps"],
@@ -141,7 +133,7 @@ def get_trainer_info(lang: str, output_path: os.PathLike, do_train: bool) -> tup
             )
             running_progress = gr.Slider(label=label, value=percentage, visible=True)
 
-            if do_train and is_matplotlib_available():
+            if is_matplotlib_available():
                 running_info["loss_viewer"] = gr.Plot(gen_loss_plot(trainer_log))
 
     swanlab_config_path = os.path.join(output_path, SWANLAB_CONFIG)
@@ -157,7 +149,7 @@ def get_trainer_info(lang: str, output_path: os.PathLike, do_train: bool) -> tup
     return running_log, running_progress, running_info
 
 
-def list_checkpoints(model_name: str, finetuning_type: str) -> "gr.Dropdown":
+def list_checkpoints(model_name: str, finetuning_type: str, reset_selection: bool = True) -> "gr.Dropdown":
     r"""List all available checkpoints.
 
     Inputs: top.model_name, top.finetuning_type
@@ -173,7 +165,9 @@ def list_checkpoints(model_name: str, finetuning_type: str) -> "gr.Dropdown":
                 ):
                     checkpoints.append(checkpoint)
 
-    if finetuning_type in PEFT_METHODS:
+    if not reset_selection:
+        return gr.Dropdown(choices=checkpoints, multiselect=finetuning_type in PEFT_METHODS)
+    elif finetuning_type in PEFT_METHODS:
         return gr.Dropdown(value=[], choices=checkpoints, multiselect=True)
     else:
         return gr.Dropdown(value=None, choices=checkpoints, multiselect=False)

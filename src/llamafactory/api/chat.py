@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""把内部聊天引擎适配为 OpenAI 兼容的普通响应、SSE 流式响应和评分接口."""
+
 import base64
 import io
 import json
@@ -86,6 +88,7 @@ def _process_request(
     if len(request.messages) == 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid length")
 
+    # system prompt 不进入交替的 user/assistant 序列；先剥离后，剩余消息必须以 user/tool 开始并以 user 结束。
     if request.messages[0].role == Role.SYSTEM:
         content = request.messages.pop(0).content
         if isinstance(content, list):
@@ -121,6 +124,7 @@ def _process_request(
                 elif input_item.type == "image_url":
                     text_content += IMAGE_PLACEHOLDER
                     image_url = input_item.image_url.url
+                    # 三种来源都先经过各自的信任边界：data URI 解码、本地路径 LFI 校验或远端 SSRF 校验。
                     if re.match(r"^data:image\/(png|jpg|jpeg|gif|bmp);base64,(.+)$", image_url):  # base64 image
                         image_stream = io.BytesIO(base64.b64decode(image_url.split(",", maxsplit=1)[1]))
                     elif os.path.isfile(image_url):  # local file
@@ -255,6 +259,7 @@ async def create_stream_chat_completion_response(
     if request.n > 1:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot stream multiple responses.")
 
+    # 先发送空 assistant delta 以兼容 OpenAI 客户端的角色初始化约定。
     yield _create_stream_chat_completion_chunk(
         completion_id=completion_id, model=request.model, delta=ChatCompletionMessage(role=Role.ASSISTANT, content="")
     )
@@ -280,6 +285,7 @@ async def create_stream_chat_completion_response(
     yield _create_stream_chat_completion_chunk(
         completion_id=completion_id, model=request.model, delta=ChatCompletionMessage(), finish_reason=Finish.STOP
     )
+    # [DONE] 是 SSE 协议终止哨兵，不是 JSON chunk；客户端据此关闭增量解析。
     yield "[DONE]"
 
 

@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""把 YAML、JSON、字典或命令行参数转换为强类型配置，并执行跨参数与依赖校验."""
+
 import json
 import os
 import sys
@@ -32,7 +34,8 @@ from transformers.training_args import ParallelMode
 from transformers.utils import is_torch_bf16_gpu_available, is_torch_npu_available
 
 from ..extras import logging
-from ..extras.constants import CHECKPOINT_NAMES, EngineName
+from ..extras.constants import CHECKPOINT_NAMES
+from ..extras.liger import get_liger_status
 from ..extras.misc import (
     check_dependencies,
     check_version,
@@ -126,7 +129,7 @@ def read_args(args: dict[str, Any] | list[str] | None = None) -> dict[str, Any] 
         return OmegaConf.to_container(OmegaConf.merge(dict_config, override_config))
     elif len(sys.argv) > 1 and sys.argv[1].endswith(".json"):
         override_config = OmegaConf.from_cli(sys.argv[2:])
-        dict_config = OmegaConf.create(json.load(Path(sys.argv[1]).absolute()))
+        dict_config = OmegaConf.create(json.loads(Path(sys.argv[1]).absolute().read_text(encoding="utf-8")))
         return OmegaConf.to_container(OmegaConf.merge(dict_config, override_config))
     else:
         return sys.argv[1:]
@@ -241,8 +244,6 @@ def _set_env_vars() -> None:
     if is_torch_npu_available():
         # avoid JIT compile on NPU devices, see https://zhuanlan.zhihu.com/p/660875458
         torch.npu.set_compile_mode(jit_compile=is_env_enabled("NPU_JIT_COMPILE"))
-        # avoid use fork method on NPU devices, see https://github.com/hiyouga/LLaMA-Factory/issues/7447
-        os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
     if is_torch_supa_available():
         # register the fused SUDNN operators (torch.ops.sudnn.*) used by the supa kernel path.
@@ -301,17 +302,19 @@ def _check_extra_dependencies(
         check_version("unsloth", mandatory=True)
 
     if model_args.enable_liger_kernel:
-        check_version("liger-kernel", mandatory=True)
+        dtype = "float32"
+        if training_args is not None:
+            if training_args.bf16 or finetuning_args.pure_bf16:
+                dtype = "bfloat16"
+            elif training_args.fp16:
+                dtype = "float16"
+        status = get_liger_status(dtype)
+        if not status.enabled:
+            logger.warning_rank0(f"Liger Kernel disabled ({status.reason}): {status.detail}")
+            model_args.enable_liger_kernel = False
 
     if model_args.mixture_of_depths is not None:
         check_version("mixture-of-depth>=1.1.6", mandatory=True)
-
-    if model_args.infer_backend == EngineName.VLLM:
-        check_version("vllm>=0.4.3,<0.29.0")
-        check_version("vllm", mandatory=True)
-    elif model_args.infer_backend == EngineName.SGLANG:
-        check_version("sglang>=0.4.5")
-        check_version("sglang", mandatory=True)
 
     if finetuning_args.use_galore:
         check_version("galore_torch", mandatory=True)
@@ -432,6 +435,8 @@ def get_ray_args(args: dict[str, Any] | list[str] | None = None) -> RayArguments
 
 def get_train_args(args: dict[str, Any] | list[str] | None = None) -> _TRAIN_CLS:
     mb_args = None
+    # MCA 和 Megatron Bridge 扩展了参数 dataclass，必须在通用解析前确定后端，
+    # 否则这些后端专属字段会被 HfArgumentParser 当成未知参数丢弃或拒绝。
     if is_env_enabled("USE_MCA"):
         model_args, data_args, training_args, finetuning_args, generating_args = _parse_train_mca_args(args)
     elif is_env_enabled("USE_MEGATRON_BRIDGE"):
@@ -452,7 +457,7 @@ def get_train_args(args: dict[str, Any] | list[str] | None = None) -> _TRAIN_CLS
     if training_args.should_log:
         _set_transformers_logging()
 
-    # Check arguments
+    # 单个 dataclass 只校验自身字段；这里集中检查跨对象、跨训练阶段的不变量。
     if finetuning_args.stage != "sft":
         if training_args.predict_with_generate:
             raise ValueError("`predict_with_generate` cannot be set as True except SFT.")
@@ -567,9 +572,6 @@ def get_train_args(args: dict[str, Any] | list[str] | None = None) -> _TRAIN_CLS
         and model_args.quantization_bit is not None
     ):
         raise ValueError("FP8 training is not compatible with quantization. Please disable one of them.")
-
-    if model_args.infer_backend != EngineName.HF:
-        raise ValueError("vLLM/SGLang backend is only available for API, CLI and Web.")
 
     if model_args.use_unsloth and is_deepspeed_zero3_enabled():
         raise ValueError("Unsloth is incompatible with DeepSpeed ZeRO-3.")
@@ -714,20 +716,6 @@ def get_infer_args(args: dict[str, Any] | list[str] | None = None) -> _INFER_CLS
     # Setup logging
     _set_transformers_logging()
 
-    # Check arguments
-    if model_args.infer_backend == "vllm":
-        if finetuning_args.stage != "sft":
-            raise ValueError("vLLM engine only supports auto-regressive models.")
-
-        if model_args.quantization_bit is not None:
-            raise ValueError("vLLM engine does not support bnb quantization (GPTQ and AWQ are supported).")
-
-        if model_args.rope_scaling is not None:
-            raise ValueError("vLLM engine does not support RoPE scaling.")
-
-        if model_args.adapter_name_or_path is not None and len(model_args.adapter_name_or_path) != 1:
-            raise ValueError("vLLM only accepts a single adapter. Merge them first.")
-
     _set_env_vars()
     _verify_model_args(model_args, data_args, finetuning_args)
     _check_extra_dependencies(model_args, finetuning_args)
@@ -750,10 +738,6 @@ def get_eval_args(args: dict[str, Any] | list[str] | None = None) -> _EVAL_CLS:
 
     # Setup logging
     _set_transformers_logging()
-
-    # Check arguments
-    if model_args.infer_backend != EngineName.HF:
-        raise ValueError("vLLM/SGLang backend is only available for API, CLI and Web.")
 
     _set_env_vars()
     _verify_model_args(model_args, data_args, finetuning_args)

@@ -1,3 +1,4 @@
 nltk
 jieba
 rouge-chinese
+tensorboard>=2.14.0,<=2.21.0

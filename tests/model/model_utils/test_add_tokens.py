@@ -18,6 +18,7 @@ import pytest
 
 from llamafactory.hparams import ModelArguments
 from llamafactory.model import load_tokenizer
+from tests.model_fixtures import local_model_path
 
 
 TINY_LLAMA3 = os.getenv("TINY_LLAMA3", "llamafactory/tiny-random-Llama-3")
@@ -28,9 +29,13 @@ UNUSED_TOKEN = "<|UNUSED_TOKEN|>"
 @pytest.mark.parametrize("special_tokens", [False, True])
 def test_add_tokens(special_tokens: bool):
     if special_tokens:
-        model_args = ModelArguments(model_name_or_path=TINY_LLAMA3, add_special_tokens=UNUSED_TOKEN)
+        model_args = ModelArguments(
+            model_name_or_path=local_model_path(TINY_LLAMA3, weights=False), add_special_tokens=UNUSED_TOKEN
+        )
     else:
-        model_args = ModelArguments(model_name_or_path=TINY_LLAMA3, add_tokens=UNUSED_TOKEN)
+        model_args = ModelArguments(
+            model_name_or_path=local_model_path(TINY_LLAMA3, weights=False), add_tokens=UNUSED_TOKEN
+        )
 
     tokenizer = load_tokenizer(model_args)["tokenizer"]
     encoded_ids = tokenizer.encode(UNUSED_TOKEN, add_special_tokens=False)

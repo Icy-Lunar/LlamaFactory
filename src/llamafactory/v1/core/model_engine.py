@@ -102,12 +102,14 @@ class ModelEngine:
             return AutoProcessor.from_pretrained(
                 self.args.model,
                 trust_remote_code=self.args.trust_remote_code,
+                local_files_only=True,
             )
         except Exception:
             logger.info_rank0("Failed to load processor, falling back to tokenizer.")
             return AutoTokenizer.from_pretrained(
                 self.args.model,
                 trust_remote_code=self.args.trust_remote_code,
+                local_files_only=True,
             )
 
     def _sync_chat_template(self) -> None:
@@ -127,6 +129,7 @@ class ModelEngine:
         config = AutoConfig.from_pretrained(
             self.args.model,
             trust_remote_code=self.args.trust_remote_code,
+            local_files_only=True,
         )
         if getattr(config, "model_type", None) == "xing4_0":
             check_version("transformers>=5.4.0", mandatory=True)
@@ -203,6 +206,7 @@ class ModelEngine:
                 dtype="auto",
                 attn_implementation=self.args.flash_attn,
                 trust_remote_code=self.args.trust_remote_code,
+                local_files_only=True,
                 **init_kwargs,
             )
 

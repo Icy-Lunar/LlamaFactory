@@ -17,6 +17,7 @@ import os
 import pytest
 
 from llamafactory.train.test_utils import compare_model, load_infer_model, load_reference_model, load_train_model
+from tests.model_fixtures import local_model_args
 
 
 TINY_LLAMA3 = os.getenv("TINY_LLAMA3", "llamafactory/tiny-random-Llama-3")
@@ -51,14 +52,14 @@ INFER_ARGS = {
 
 @pytest.mark.xfail(reason="PiSSA initialization is not stable in different platform.")
 def test_pissa_train():
-    model = load_train_model(**TRAIN_ARGS)
+    model = load_train_model(**local_model_args(TRAIN_ARGS))
     ref_model = load_reference_model(TINY_LLAMA_PISSA, TINY_LLAMA_PISSA, use_pissa=True, is_trainable=True)
     compare_model(model, ref_model)
 
 
 @pytest.mark.xfail(reason="Known connection error.")
 def test_pissa_inference():
-    model = load_infer_model(**INFER_ARGS)
+    model = load_infer_model(**local_model_args(INFER_ARGS))
     ref_model = load_reference_model(TINY_LLAMA_PISSA, TINY_LLAMA_PISSA, use_pissa=True, is_trainable=False)
     ref_model = ref_model.merge_and_unload()
     compare_model(model, ref_model)

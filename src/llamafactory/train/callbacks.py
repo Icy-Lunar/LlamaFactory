@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""训练生命周期回调：日志、附属文件保存、Profiler、PiSSA 转换和实验报告."""
+
 import fnmatch
 import json
 import os
@@ -33,6 +35,12 @@ from typing_extensions import override
 
 from ..extras import logging
 from ..extras.constants import TRAINER_LOG, V_HEAD_SAFE_WEIGHTS_NAME, V_HEAD_WEIGHTS_NAME
+from ..extras.diagnostics import stage, training_started
+from ..extras.memory_calibration import (
+    ACTUAL_MEMORY_NAME,
+    ESTIMATE_METADATA_NAME,
+    record_calibration,
+)
 from ..extras.misc import (
     get_peak_memory,
     is_env_enabled,
@@ -178,6 +186,78 @@ class PissaConvertCallback(TrainerCallback):
                 setattr(model.peft_config["default"], "init_lora_weights", init_lora_weights)
 
 
+class MemoryCalibrationCallback(TrainerCallback):
+    r"""Feed the training process's measured peak back into the static estimator."""
+
+    def __init__(self) -> None:
+        self.metadata: dict[str, Any] | None = None
+        self.memory_api: Any = None
+
+    def _select_memory_api(self) -> Any:
+        if torch.cuda.is_available():  # CUDA and ROCm expose the same torch.cuda memory API.
+            return torch.cuda
+        for name in ("xpu", "npu"):
+            api = getattr(torch, name, None)
+            if api is not None and callable(getattr(api, "is_available", None)) and api.is_available():
+                return api
+        return None
+
+    @override
+    def on_train_begin(self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs):
+        if not args.should_save:
+            return
+        metadata_path = os.path.join(args.output_dir, ESTIMATE_METADATA_NAME)
+        try:
+            with open(metadata_path, encoding="utf-8") as stream:
+                metadata = json.load(stream)
+            if not metadata.get("calibration_key") or float(metadata.get("base_estimated_gib", 0)) <= 0:
+                return
+        except (AttributeError, OSError, TypeError, ValueError, json.JSONDecodeError):
+            return
+
+        memory_api = self._select_memory_api()
+        if memory_api is None or not callable(getattr(memory_api, "reset_peak_memory_stats", None)):
+            return
+        try:
+            memory_api.reset_peak_memory_stats()
+        except (RuntimeError, TypeError):
+            return
+        self.metadata = metadata
+        self.memory_api = memory_api
+
+    @override
+    def on_train_end(self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs):
+        if not args.should_save or self.metadata is None or self.memory_api is None:
+            return
+        try:
+            actual_gib = float(self.memory_api.max_memory_allocated()) / 1024**3
+            entry = record_calibration(
+                str(self.metadata["calibration_key"]),
+                actual_gib=actual_gib,
+                base_estimated_gib=float(self.metadata["base_estimated_gib"]),
+            )
+            observation = {
+                "version": 1,
+                "actual_peak_gib": round(actual_gib, 4),
+                "estimated_gib": self.metadata.get("estimated_gib"),
+                "base_estimated_gib": self.metadata.get("base_estimated_gib"),
+                "calibration_key": self.metadata.get("calibration_key"),
+                "calibration": entry,
+            }
+            output_path = os.path.join(args.output_dir, ACTUAL_MEMORY_NAME)
+            temporary_path = output_path + f".{os.getpid()}.tmp"
+            with open(temporary_path, "w", encoding="utf-8") as stream:
+                json.dump(observation, stream, ensure_ascii=False, indent=2, sort_keys=True)
+                stream.write("\n")
+            os.replace(temporary_path, output_path)
+            logger.info_rank0(
+                f"Memory calibration recorded: actual={actual_gib:.2f} GiB, "
+                f"estimated={float(self.metadata.get('estimated_gib', 0)):.2f} GiB."
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, KeyError):
+            logger.warning_rank0("Failed to record memory calibration feedback.", exc_info=True)
+
+
 class LogCallback(TrainerCallback):
     r"""A callback for logging training and evaluation status."""
 
@@ -246,6 +326,7 @@ class LogCallback(TrainerCallback):
     def on_train_begin(self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs):
         if args.should_save:
             self.do_train = True
+            training_started()
             self._reset(max_steps=state.max_steps)
             self._create_thread_pool(output_dir=args.output_dir)
 
@@ -260,6 +341,11 @@ class LogCallback(TrainerCallback):
             control.should_training_stop = True
 
     @override
+    def on_save(self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs):
+        stage("checkpoint", step=state.global_step)
+        stage("training", step=state.global_step)
+
+    @override
     def on_step_end(self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs):
         if self.aborted:
             control.should_epoch_stop = True
@@ -267,6 +353,8 @@ class LogCallback(TrainerCallback):
 
     @override
     def on_evaluate(self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs):
+        self._diagnostic_evaluating = False
+        stage("training" if self.do_train else "evaluation_done", step=state.global_step)
         if not self.do_train:
             self._close_thread_pool()
 
@@ -280,6 +368,8 @@ class LogCallback(TrainerCallback):
         if not args.should_save:
             return
 
+        if not getattr(self, "_diagnostic_evaluating", False):
+            stage("training", step=state.global_step)
         self._timing(cur_steps=state.global_step)
         logs = dict(
             current_steps=self.cur_steps,
@@ -321,6 +411,9 @@ class LogCallback(TrainerCallback):
         self, args: "TrainingArguments", state: "TrainerState", control: "TrainerControl", **kwargs
     ):
         if self.do_train:
+            if not getattr(self, "_diagnostic_evaluating", False):
+                stage("evaluation", step=state.global_step)
+                self._diagnostic_evaluating = True
             return
 
         if self.aborted:

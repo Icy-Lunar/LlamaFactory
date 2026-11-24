@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""定义提示模板协议和模型族注册表，负责消息编码、停止符与工具调用格式衔接."""
+
 import re
 from copy import deepcopy
 from dataclasses import dataclass
@@ -2621,13 +2623,9 @@ register_template(
     name="xing4_0",
     format_user=StringFormatter(slots=["<_user>{{content}}<_bot>"]),
     format_assistant=StringFormatter(slots=["{{content}}", {"eos_token"}, "\n"]),
-    format_function=FunctionFormatter(
-        slots=["{{content}}", {"eos_token"}, "\n"], tool_format="xing4"
-    ),
+    format_function=FunctionFormatter(slots=["{{content}}", {"eos_token"}, "\n"], tool_format="xing4"),
     format_system=StringFormatter(slots=["{{content}}"]),
-    format_observation=StringFormatter(
-        slots=["<_observation><tool_response>{{content}}</tool_response><_bot>"]
-    ),
+    format_observation=StringFormatter(slots=["<_observation><tool_response>{{content}}</tool_response><_bot>"]),
     format_prefix=EmptyFormatter(slots=["<_system>"]),
     format_tools=ToolFormatter(tool_format="xing4"),
     thought_words=("<think>\n", "</think>"),

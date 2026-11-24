@@ -56,12 +56,10 @@ optimizer = OptimizerPlugin("example")(model, config)
 @DistributedPlugin("example").register()
 class ExampleDistributed(BaseDistributed):
     @staticmethod
-    def shard_model(model, dist_config, **kwargs):
-        ...
+    def shard_model(model, dist_config, **kwargs): ...
 
     @staticmethod
-    def save_checkpoint(model, optimizer, checkpoint_dir, **kwargs):
-        ...
+    def save_checkpoint(model, optimizer, checkpoint_dir, **kwargs): ...
 
 
 model = DistributedPlugin("example").shard_model(model, dist_config)

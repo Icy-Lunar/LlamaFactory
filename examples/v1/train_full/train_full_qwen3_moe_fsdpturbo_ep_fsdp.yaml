@@ -1,4 +1,4 @@
-model: Qwen/Qwen3.5-35B-A3B
+model: /path/to/Qwen3.5-35B-A3B
 model_class: llm
 
 kernel_config:

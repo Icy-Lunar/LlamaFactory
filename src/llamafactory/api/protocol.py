@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""定义 OpenAI 兼容 API 的请求、消息、工具调用、响应和 token 用量数据模型."""
+
 import time
 from enum import StrEnum, unique
 from typing import Any, Literal

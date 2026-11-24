@@ -17,6 +17,7 @@ import os
 import torch
 
 from llamafactory.train.test_utils import load_infer_model, load_train_model
+from tests.model_fixtures import local_model_args
 
 
 TINY_LLAMA3 = os.getenv("TINY_LLAMA3", "llamafactory/tiny-random-Llama-3")
@@ -44,14 +45,14 @@ INFER_ARGS = {
 
 
 def test_full_train():
-    model = load_train_model(**TRAIN_ARGS)
+    model = load_train_model(**local_model_args(TRAIN_ARGS))
     for param in model.parameters():
         assert param.requires_grad is True
         assert param.dtype == torch.float32
 
 
 def test_full_inference():
-    model = load_infer_model(**INFER_ARGS)
+    model = load_infer_model(**local_model_args(INFER_ARGS))
     for param in model.parameters():
         assert param.requires_grad is False
         assert param.dtype == torch.float16
