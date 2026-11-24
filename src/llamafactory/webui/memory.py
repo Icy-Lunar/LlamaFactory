@@ -530,9 +530,11 @@ def _estimate_lora_parameters(
         "up_proj": (shape.hidden_size, shape.intermediate_size),
         "down_proj": (shape.intermediate_size, shape.hidden_size),
     }
-    selected = module_dimensions if all_modules else {
-        name: dimensions for name, dimensions in module_dimensions.items() if name in targets
-    }
+    selected = (
+        module_dimensions
+        if all_modules
+        else {name: dimensions for name, dimensions in module_dimensions.items() if name in targets}
+    )
     # Unknown custom names are conservatively treated as hidden-to-hidden projections.
     unknown_count = 0 if all_modules else len(targets - set(module_dimensions))
     per_layer = sum(rank * (input_size + output_size) for input_size, output_size in selected.values())
@@ -540,9 +542,7 @@ def _estimate_lora_parameters(
 
     expert_targets = {"gate_proj", "up_proj", "down_proj"}.intersection(selected)
     if expert_targets and shape.num_local_experts > 1:
-        expert_parameters = sum(
-            rank * sum(module_dimensions[name]) for name in expert_targets
-        )
+        expert_parameters = sum(rank * sum(module_dimensions[name]) for name in expert_targets)
         per_layer += expert_parameters * (shape.num_local_experts - 1)
     if shape.shared_expert_intermediate_size and (all_modules or expert_targets):
         shared_dimensions = shape.hidden_size + shape.shared_expert_intermediate_size

@@ -14,6 +14,7 @@
 [![Discord](assets/thirdparty/discord.svg)](https://discord.gg/rKfvV9r9FK)
 [![WeChat](https://img.shields.io/badge/WeChat-User%20Group-blue?logo=wechat)](https://github.com/hiyouga/llamafactory-community)
 [![Blog](https://img.shields.io/badge/Hugo-Official%20Blog-blue?logo=hugo)](https://blog.llamafactory.net/)
+[![GitCode](https://gitcode.com/hiyouga/LlamaFactory/star/badge.svg)](https://gitcode.com/hiyouga/LlamaFactory)
 
 [![Open in Colab](assets/thirdparty/colab.svg)](https://colab.research.google.com/drive/1d5KQtbemerlSDSxZIfAaWXhKr30QypiK?usp=sharing)
 [![Open in DSW](assets/thirdparty/dsw.svg)](https://gallery.pai-ml.com/#/preview/deepLearning/nlp/llama_factory)
@@ -177,7 +178,7 @@ https://github.com/user-attachments/assets/43b700c6-a178-41db-b1f8-8190a5d3fcfc
 
 [25/02/11] 我们支持了在导出模型时保存 **[Ollama](https://github.com/ollama/ollama)** 配置文件。详细用法请参照 [examples](examples/README_zh.md)。
 
-[25/02/05] 我们支持了在语音理解任务上微调 **[Qwen2-Audio](Qwen/Qwen2-Audio-7B-Instruct)** 和 **[MiniCPM-o-2.6](https://huggingface.co/openbmb/MiniCPM-o-2_6)** 模型。
+[25/02/05] 我们支持了在语音理解任务上微调 **[Qwen2-Audio](https://huggingface.co/Qwen/Qwen2-Audio-7B-Instruct)** 和 **[MiniCPM-o-2.6](https://huggingface.co/openbmb/MiniCPM-o-2_6)** 模型。
 
 [25/01/31] 我们支持了 **[DeepSeek-R1](https://huggingface.co/deepseek-ai/DeepSeek-R1)** 和 **[Qwen2.5-VL](https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct)** 模型的微调。
 
@@ -274,7 +275,7 @@ https://github.com/user-attachments/assets/43b700c6-a178-41db-b1f8-8190a5d3fcfc
 
 [23/06/29] 我们提供了一个**可复现的**指令模型微调示例，详细内容请查阅 [Baichuan-7B-sft](https://huggingface.co/hiyouga/Baichuan-7B-sft)。
 
-[23/06/22] 我们对齐了[示例 API](src/api_demo.py) 与 [OpenAI API](https://platform.openai.com/docs/api-reference/chat) 的格式，您可以将微调模型接入**任意基于 ChatGPT 的应用**中。
+[23/06/22] 我们对齐了[示例 API](src/api.py) 与 [OpenAI API](https://platform.openai.com/docs/api-reference/chat) 的格式，您可以将微调模型接入**任意基于 ChatGPT 的应用**中。
 
 [23/06/03] 我们实现了 4 比特的 LoRA 训练（也称 **[QLoRA](https://github.com/artidoro/qlora)**）。详细用法请参照 [examples](examples/README_zh.md)。
 
@@ -301,9 +302,13 @@ https://github.com/user-attachments/assets/43b700c6-a178-41db-b1f8-8190a5d3fcfc
 | [GPT-OSS](https://huggingface.co/openai)                          | 20B/120B                         | gpt_oss              |
 | [Granite 3-4](https://huggingface.co/ibm-granite)                 | 1B/2B/3B/7B/8B                   | granite3/granite4    |
 | [Hunyuan/Hunyuan1.5 (MT)](https://huggingface.co/tencent/)        | 0.5B/1.8B/4B/7B/13B              | hunyuan/hunyuan_small|
+| [InCoder-32B](https://huggingface.co/Multilingual-Multimodal-NLP/IndustrialCoder) | 32B                              | 分词器模板（v1）            |
+| [InCoder-32B-Thinking](https://huggingface.co/Multilingual-Multimodal-NLP/IndustrialCoder-Thinking) | 32B                              | 分词器模板（v1）            |
 | [InternLM 2-3](https://huggingface.co/internlm)                   | 7B/8B/20B                        | intern2              |
 | [InternVL 2.5-3.5](https://huggingface.co/OpenGVLab)              | 1B/2B/4B/8B/14B/30B/38B/78B/241B | intern_vl            |
 | [Intern-S1-mini](https://huggingface.co/internlm/)                | 8B                               | intern_s1            |
+| [IQuest-Coder (V1 Instruct/Thinking)](https://huggingface.co/collections/IQuestLab/iquest-coder) | 7B/14B/40B                       | 分词器模板（v1）            |
+| [IQuest-Q1](https://huggingface.co/IQuestLab/IQuest-Q1)           | 320B-A15B                        | [官方模板](https://huggingface.co/IQuestLab/IQuest-Q1/blob/main/chat_template.jinja)（微调待验证） |
 | [Kimi-VL](https://huggingface.co/moonshotai)                      | 16B                              | kimi_vl              |
 | [Ling 2.0 (mini/flash)](https://huggingface.co/inclusionAI)       | 16B/100B                         | bailing_v2           |
 | [LFM 2.5 (VL)](https://huggingface.co/LiquidAI)                   | 1.2B/1.6B                        | lfm2/lfm2_vl         |
@@ -331,6 +336,7 @@ https://github.com/user-attachments/assets/43b700c6-a178-41db-b1f8-8190a5d3fcfc
 | [Qwen3 (MoE/Instruct/Thinking/Next)](https://huggingface.co/Qwen) | 0.6B/1.7B/4B/8B/14B/32B/80B/235B | qwen3/qwen3_nothink  |
 | [Qwen3.5](https://huggingface.co/Qwen)                            | 0.8B/2B/4B/9B/27B/35B/122B/397B  | qwen3_5/qwen3_5_nothink              |
 | [Qwen3.6](https://huggingface.co/Qwen)                            | 27B/35B                          | qwen3_6              |
+| [Qwen3.8](https://huggingface.co/Qwen)                            | 27B/2.4T                         | qwen3_8              |
 | [Qwen2-Audio](https://huggingface.co/Qwen)                        | 7B                               | qwen2_audio          |
 | [Qwen2.5-Omni](https://huggingface.co/Qwen)                       | 3B/7B                            | qwen2_omni           |
 | [Qwen3-Omni](https://huggingface.co/Qwen)                         | 30B                              | qwen3_omni           |
@@ -339,6 +345,7 @@ https://github.com/user-attachments/assets/43b700c6-a178-41db-b1f8-8190a5d3fcfc
 | [Seed (OSS/Coder)](https://huggingface.co/ByteDance-Seed)         | 8B/36B                           | seed_oss/seed_coder  |
 | [StarCoder 2](https://huggingface.co/bigcode)                     | 3B/7B/15B                        | -                    |
 | [TeleChat 2-2.5](https://huggingface.co/Tele-AI)                  | 3B/7B/35B/115B                   | telechat2            |
+| [Xing4.0-29B-A4B](https://huggingface.co/XingChen-AGI)            | 29B-A4B                          | xing4_0              |
 | [Yuan 2](https://huggingface.co/IEITYuan)                         | 2B/51B/102B                      | yuan                 |
 
 > [!NOTE]
@@ -418,7 +425,7 @@ https://github.com/user-attachments/assets/43b700c6-a178-41db-b1f8-8190a5d3fcfc
 - [SlimOrca (en)](https://huggingface.co/datasets/Open-Orca/SlimOrca)
 - [MathInstruct (en)](https://huggingface.co/datasets/TIGER-Lab/MathInstruct)
 - [Firefly 1.1M (zh)](https://huggingface.co/datasets/YeungNLP/firefly-train-1.1M)
-- [Wiki QA (en)](https://huggingface.co/datasets/wiki_qa)
+- [Wiki QA (en)](https://huggingface.co/datasets/microsoft/wiki_qa)
 - [Web QA (zh)](https://huggingface.co/datasets/suolyer/webqa)
 - [WebNovel (zh)](https://huggingface.co/datasets/zxbsmk/webnovel_cn)
 - [Nectar (en)](https://huggingface.co/datasets/berkeley-nest/Nectar)
@@ -473,11 +480,10 @@ https://github.com/user-attachments/assets/43b700c6-a178-41db-b1f8-8190a5d3fcfc
 
 </details>
 
-部分数据集的使用需要确认，我们推荐使用下述命令登录您的 Hugging Face 账户。
+部分数据集的使用需要确认。安装 LlamaFactory 后，我们推荐使用下述命令登录您的 Hugging Face 账户。
 
 ```bash
-pip install --upgrade huggingface_hub
-huggingface-cli login
+hf auth login
 ```
 
 ## 软硬件依赖
@@ -531,7 +537,7 @@ pip install -r requirements/metrics.txt
 
 可选的额外依赖项：`metrics`、`deepspeed`。使用 `pip install -e . && pip install -r requirements/metrics.txt -r requirements/deepspeed.txt` 安装。
 
-其他可选依赖项请参考 `examples/requirements/` 目录下的文件。
+其他可选依赖项请参考 `requirements/` 目录下的文件。
 
 #### 从镜像安装
 
@@ -569,11 +575,21 @@ python -c "import torch; print(torch.cuda.is_available())"
 
 如果看到 `True` 则说明安装成功。
 
+AMD ROCm 用户请改为从 [AMD TheRock 索引](https://github.com/ROCm/TheRock/blob/main/RELEASES.md)安装 PyTorch。将 `gfx1201` 替换为您显卡对应的架构，可通过 `rocm-bootstrap-detect` 查询（使用 `pip install rocm-bootstrap` 安装），或参考 [GFX 架构对照表](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#gfx-target-lookup-table)：
+
+```bash
+pip uninstall torch torchvision torchaudio
+pip install --index-url https://stable.repo.amd.com/rocm/whl-next/ "torch[device-gfx1201]" "torchvision[device-gfx1201]" torchaudio
+python -c "import torch; print(torch.cuda.is_available(), torch.version.hip)"
+```
+
+ROCm 版本同样使用 `torch.cuda` 接口，看到 `True` 即说明显卡可用。在 `gfx1101`、`gfx1102`、`gfx1150`、`gfx1151` 和 `gfx1200` 上，PyTorch 只有在设置 `set TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1` 后才会启用基于 AOTriton 的 flash 和 memory-efficient SDPA 后端。否则这些显卡上的 `scaled_dot_product_attention` 会回退到 math 后端，速度慢得多且显存占用高得多。
+
 若遇到类似 `Can't pickle local object` 的报错，请设置 `dataloader_num_workers: 0`。
 
 #### 安装 BitsAndBytes
 
-如果要在 Windows 平台上开启量化 LoRA（QLoRA），需要安装 bitsandbytes。
+如果要在 Windows 平台上开启量化 LoRA（QLoRA），需要安装 bitsandbytes。bitsandbytes 自 0.50.2 起的官方发布包同样包含 Windows 上的 ROCm 构建，因此 AMD 显卡也可直接使用。
 
 对于大多数用户，建议优先使用官方发布的最新版本：
 
@@ -612,14 +628,18 @@ pip install https://github.com/jllllll/bitsandbytes-windows-webui/releases/downl
 # Docker Hub
 docker pull hiyouga/llamafactory:latest-910b-ubuntu
 docker pull hiyouga/llamafactory:latest-a3-ubuntu
+docker pull hiyouga/llamafactory:latest-950-ubuntu
 docker pull hiyouga/llamafactory:latest-910b-openeuler
 docker pull hiyouga/llamafactory:latest-a3-openeuler
+docker pull hiyouga/llamafactory:latest-950-openeuler
 
 # quay.io
 docker pull quay.io/ascend/llamafactory:latest-910b-ubuntu
 docker pull quay.io/ascend/llamafactory:latest-a3-ubuntu
+docker pull quay.io/ascend/llamafactory:latest-950-ubuntu
 docker pull quay.io/ascend/llamafactory:latest-910b-openeuler
 docker pull quay.io/ascend/llamafactory:latest-a3-openeuler
+docker pull quay.io/ascend/llamafactory:latest-950-openeuler
 ```
 
 #### 安装 BitsAndBytes

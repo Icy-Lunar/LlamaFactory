@@ -1,4 +1,8 @@
 {
+  "gs1_demo": {
+    "file_name": "gs1_demo.jsonl",
+    "formatting": "gs1"
+  },
   "identity": {
     "file_name": "identity.json"
   },
@@ -184,7 +188,7 @@
     }
   },
   "wikiqa": {
-    "hf_hub_url": "wiki_qa",
+    "hf_hub_url": "microsoft/wiki_qa",
     "columns": {
       "prompt": "question",
       "response": "answer"

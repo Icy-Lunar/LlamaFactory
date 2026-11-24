@@ -41,21 +41,21 @@ TRAIN_ARGS = {
 }
 
 
-@pytest.mark.runs_on(["cpu", "mps"])
+@pytest.mark.runs_on(["cpu", "mps", "xpu"])
 def test_load_train_only():
     dataset_module = load_dataset_module(**local_model_args(TRAIN_ARGS))
     assert dataset_module.get("train_dataset") is not None
     assert dataset_module.get("eval_dataset") is None
 
 
-@pytest.mark.runs_on(["cpu", "mps"])
+@pytest.mark.runs_on(["cpu", "mps", "xpu"])
 def test_load_val_size():
     dataset_module = load_dataset_module(val_size=0.1, **local_model_args(TRAIN_ARGS))
     assert dataset_module.get("train_dataset") is not None
     assert dataset_module.get("eval_dataset") is not None
 
 
-@pytest.mark.runs_on(["cpu", "mps"])
+@pytest.mark.runs_on(["cpu", "mps", "xpu"])
 def test_load_eval_data():
     dataset_module = load_dataset_module(eval_dataset=TINY_DATA, **local_model_args(TRAIN_ARGS))
     assert dataset_module.get("train_dataset") is not None

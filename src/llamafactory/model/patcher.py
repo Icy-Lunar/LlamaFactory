@@ -88,12 +88,9 @@ def _check_fla_dependencies() -> None:
 
 
 def patch_qwen3_5_forward_npu(model: "PreTrainedModel") -> None:
-    """Patch for Qwen3.5 models on NPU by importing torch_npu to enable torch.cuda compatibility.
+    """Replace the Qwen3.5 gated delta rule kernel with the NPU-compatible implementation.
 
-    On NPU, torch.cuda operations will fail unless torch_npu is imported.
-    torch_npu provides compatibility layer that maps torch.cuda calls to NPU operations.
-
-    Also replaces chunk_gated_delta_rule with NPU-compatible implementation.
+    Skip the patch unless an Ascend910-series device is detected and triton_ascend is installed.
     """
     import importlib.metadata
 
@@ -130,8 +127,8 @@ def patch_qwen3_5_forward_npu(model: "PreTrainedModel") -> None:
             logger.warning_rank0(f"Failed to replace chunk_gated_delta_rule for NPU: {e}")
     elif model.config.architectures[0] == "Qwen3_5ForConditionalGeneration":
         try:
-            # Qwen3.5 structure: model.model.layers
-            for layer in model.model.layers:
+            # Qwen3.5 structure: model.model.language_model.layers
+            for layer in model.model.language_model.layers:
                 if hasattr(layer, "linear_attn"):
                     layer.linear_attn.chunk_gated_delta_rule = npu_chunk_gated_delta_rule
 
@@ -374,6 +371,9 @@ def patch_config(
     init_kwargs: dict[str, Any],
     is_trainable: bool,
 ) -> None:
+    if getattr(config, "model_type", None) == "xing4_0":
+        check_version("transformers>=5.4.0", mandatory=True)
+
     if model_args.compute_dtype is None:  # priority: bf16 > fp16 > fp32
         if model_args.infer_dtype != "auto" and not is_trainable:
             model_args.compute_dtype = getattr(torch, model_args.infer_dtype)

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from ...extras import logging
 from ...extras.constants import AttentionFunction
+from ...extras.misc import is_torch_supa_available
 from ...extras.packages import is_torch_version_greater_than
 
 
@@ -63,7 +64,12 @@ def configure_attn_implementation(config: "PretrainedConfig", model_args: "Model
             model_args.flash_attn = AttentionFunction.DISABLED
 
     if model_args.flash_attn == AttentionFunction.AUTO:
-        return
+        if is_torch_supa_available():
+            # supa has no FlashAttention build, and AUTO would otherwise be resolved against the
+            # cuda-masqueraded device (which may pick FA2); pin SDPA, the fastest supported backend.
+            requested_attn_implementation = "sdpa"
+        else:
+            return
 
     elif model_args.flash_attn == AttentionFunction.DISABLED:
         requested_attn_implementation = "eager"
@@ -75,9 +81,16 @@ def configure_attn_implementation(config: "PretrainedConfig", model_args: "Model
 
         requested_attn_implementation = "sdpa"
     elif model_args.flash_attn == AttentionFunction.FA2:
-        from transformers import is_torch_npu_available
+        from transformers import is_torch_npu_available, is_torch_xpu_available
+        from transformers.utils import is_kernels_available
 
-        if not (is_flash_attn_2_available() or is_torch_npu_available()):
+        if is_torch_xpu_available():  # FA2 on XPU is provided by the `kernels` hub kernel
+            if not is_kernels_available():
+                logger.warning_rank0(
+                    "FlashAttention-2 on XPU requires `kernels`: `pip install transformers[kernels]`."
+                )
+                return
+        elif not (is_flash_attn_2_available() or is_torch_npu_available()):
             logger.warning_rank0("FlashAttention-2 is not installed.")
             return
 
@@ -95,6 +108,10 @@ def configure_attn_implementation(config: "PretrainedConfig", model_args: "Model
 
     if getattr(config, "model_type", None) == "internlm2":  # special case for custom models
         setattr(config, "attn_implementation", requested_attn_implementation)
+    elif getattr(config, "model_type", None) == "kimi_k25":
+        setattr(config, "_attn_implementation", requested_attn_implementation)
+        setattr(config.vision_config, "_attn_implementation", requested_attn_implementation)
+        setattr(config.text_config, "_attn_implementation", requested_attn_implementation)
     elif getattr(config, "model_type", None) == "kimi_vl":
         setattr(config.vision_config, "_attn_implementation", requested_attn_implementation)
         setattr(config.text_config, "_attn_implementation", requested_attn_implementation)

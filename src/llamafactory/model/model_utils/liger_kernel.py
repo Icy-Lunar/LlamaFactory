@@ -39,6 +39,10 @@ def apply_liger_kernel(
     if not is_trainable or not model_args.enable_liger_kernel:
         return
 
+    if get_device_name() == "supa":
+        # liger kernels can not run on supa currently.
+        return
+
     model_type = getattr(config, "model_type", None)
     dtype = str(model_args.compute_dtype).removeprefix("torch.") if model_args.compute_dtype else "float32"
     status = get_model_liger_status(model_type, dtype)

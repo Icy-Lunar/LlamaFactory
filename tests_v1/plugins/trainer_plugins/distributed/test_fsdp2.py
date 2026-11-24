@@ -18,13 +18,22 @@ Validates that the FSDP2 meta loading path behaves correctly for tied weights
 and non-persistent buffers by comparing it with the standard non-meta path.
 """
 
+from types import SimpleNamespace
+
+import pytest
 import torch
+import torch.distributed as dist
+from torch.distributed.device_mesh import init_device_mesh
+from torch.distributed.fsdp import FSDPModule, fully_shard
 from transformers import AutoConfig
 
 from llamafactory.v1.accelerator.interface import DistributedInterface
 from llamafactory.v1.config.arg_parser import get_args
 from llamafactory.v1.core.model_engine import ModelEngine
+from llamafactory.v1.plugins.trainer_plugins.distributed import fsdp2 as fsdp2_module
 from llamafactory.v1.plugins.trainer_plugins.distributed.fsdp2 import FSDP2Engine
+from llamafactory.v1.utils.env import find_available_port
+from llamafactory.v1.utils.pytest import dist_env
 from tests.model_fixtures import local_model_path
 
 
@@ -41,6 +50,74 @@ def collect_non_persistent_buffers(model):
             if buf is not None:
                 result[fqn] = buf.detach().cpu().clone()
     return result
+
+
+@pytest.mark.skipif(not dist.is_available() or not dist.is_gloo_available(), reason="Requires the CPU Gloo backend.")
+def test_fsdp2_save_pretrained_uses_original_model_class():
+    """Save using the original custom model class and restore the FSDP2 wrapper."""
+    saved_classes = []
+
+    class CustomModel(torch.nn.Module):
+        _auto_class = "AutoModel"
+
+        def save_pretrained(self, *args, **kwargs):
+            saved_classes.append(type(self))
+
+    model = CustomModel()
+    with dist_env(master_port=find_available_port()):
+        dist.init_process_group("gloo")
+        fully_shard(model, mesh=init_device_mesh("cpu", (1,)))
+    wrapper_cls = type(model)
+    assert isinstance(model, FSDPModule)
+
+    fsdp2_module._save_pretrained(model, "unused", {})
+
+    assert saved_classes == [CustomModel]
+    assert type(model) is wrapper_cls
+
+
+def test_fsdp2_rank0_syncs_non_persistent_buffers(monkeypatch):
+    expected = torch.tensor([1.0, 0.5, 0.25])
+
+    class Rank0Model(torch.nn.Module):
+        def __init__(self, rank):
+            super().__init__()
+            self.config = SimpleNamespace(tie_word_embeddings=False)
+            self._init_mode = "init_on_rank0"
+            self.weight = torch.nn.Parameter(torch.ones(1))
+            buffer = expected.clone() if rank == 0 else torch.empty_like(expected, device="meta")
+            self.register_buffer("inv_freq", buffer, persistent=False)
+
+        def to_empty(self, *, device, recurse=True):
+            self.inv_freq = torch.zeros_like(expected, device=device)
+            return self
+
+    def set_model_state_dict(model, state_dict, **kwargs):
+        assert torch.count_nonzero(model.inv_freq) == 0
+
+    monkeypatch.setattr(fsdp2_module, "get_current_accelerator", lambda: torch.device("cpu"))
+    monkeypatch.setattr(fsdp2_module, "set_model_state_dict", set_model_state_dict)
+
+    for rank in (0, 1):
+        engine = object.__new__(FSDP2Engine)
+        engine.rank = rank
+        engine.world_size = 2
+        monkeypatch.setattr(engine, "prepare_model", lambda model: model)
+        monkeypatch.setattr(engine, "_warmup_grad_norm", lambda model: None)
+
+        def broadcast(buffer, src):
+            assert src == 0
+            if rank == 0:
+                assert torch.equal(buffer, expected)
+            else:
+                assert torch.count_nonzero(buffer) == 0
+                buffer.copy_(expected)
+
+        monkeypatch.setattr(torch.distributed, "broadcast", broadcast)
+        model = engine.shard_model(Rank0Model(rank))
+
+        assert "inv_freq" not in model.state_dict()
+        assert torch.equal(model.inv_freq, expected)
 
 
 def test_fsdp2_meta_loading_buffers_and_tied_weights():
@@ -60,10 +137,11 @@ def test_fsdp2_meta_loading_buffers_and_tied_weights():
         }
     )
 
-    config = AutoConfig.from_pretrained(TINY_MODEL)
+    model_path = local_model_path(TINY_MODEL)
+    config = AutoConfig.from_pretrained(model_path, local_files_only=True)
 
     # --- NORMAL PATH ---
-    normal_args, *_ = get_args(dict(model=local_model_path(TINY_MODEL), init_config=None))
+    normal_args, *_ = get_args(dict(model=model_path, init_config=None))
     normal_engine = ModelEngine(model_args=normal_args)
     normal_model = normal_engine.model.to(torch.bfloat16)
 
@@ -73,7 +151,7 @@ def test_fsdp2_meta_loading_buffers_and_tied_weights():
     del normal_model
 
     # --- META PATH ---
-    meta_args, *_ = get_args(dict(model=local_model_path(TINY_MODEL), init_config={"name": "init_on_meta"}))
+    meta_args, *_ = get_args(dict(model=model_path, init_config={"name": "init_on_meta"}))
     meta_model_engine = ModelEngine(model_args=meta_args)
     meta_model = meta_model_engine.model
 

@@ -20,7 +20,7 @@
 import json
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any, Optional
 
@@ -36,7 +36,13 @@ from transformers.utils import is_torch_bf16_gpu_available, is_torch_npu_availab
 from ..extras import logging
 from ..extras.constants import CHECKPOINT_NAMES
 from ..extras.liger import get_liger_status
-from ..extras.misc import check_dependencies, check_version, get_current_device, is_env_enabled
+from ..extras.misc import (
+    check_dependencies,
+    check_version,
+    get_current_device,
+    is_env_enabled,
+    is_torch_supa_available,
+)
 from ..extras.packages import is_mcore_adapter_available, is_megatron_bridge_available
 from .data_args import DataArguments
 from .evaluation_args import EvaluationArguments
@@ -149,12 +155,27 @@ def _get_kt_runtime_capacity(
     return tokens_per_sample * max(local_batch_sizes)
 
 
+def _map_warmup_ratio(parser: "HfArgumentParser", args: dict[str, Any]) -> dict[str, Any]:
+    r"""Map `warmup_ratio` onto `warmup_steps` for transformers v5, which dropped it (a float below 1 is a ratio)."""
+    if "warmup_ratio" not in args or any(
+        f.name == "warmup_ratio" for dtype in parser.dataclass_types for f in fields(dtype)
+    ):
+        return args
+
+    args = dict(args)
+    warmup_ratio = args.pop("warmup_ratio")
+    if not args.get("warmup_steps"):  # as in v4, a positive warmup_steps wins
+        args["warmup_steps"] = warmup_ratio
+
+    return args
+
+
 def _parse_args(
     parser: "HfArgumentParser", args: dict[str, Any] | list[str] | None = None, allow_extra_keys: bool = False
 ) -> tuple[Any]:
     args = read_args(args)
     if isinstance(args, dict):
-        return parser.parse_dict(args, allow_extra_keys=allow_extra_keys)
+        return parser.parse_dict(_map_warmup_ratio(parser, args), allow_extra_keys=allow_extra_keys)
 
     (*parsed_args, unknown_args) = parser.parse_args_into_dataclasses(args=args, return_remaining_strings=True)
 
@@ -224,6 +245,20 @@ def _set_env_vars() -> None:
         # avoid JIT compile on NPU devices, see https://zhuanlan.zhihu.com/p/660875458
         torch.npu.set_compile_mode(jit_compile=is_env_enabled("NPU_JIT_COMPILE"))
 
+    if is_torch_supa_available():
+        # register the fused SUDNN operators (torch.ops.sudnn.*) used by the supa kernel path.
+        # torch_supa itself is auto-loaded on `import torch`, but torch_supa_ext is not.
+        try:
+            import torch_supa_ext  # noqa: F401
+        except Exception:
+            logger.warning_rank0_once(
+                "Failed to import torch_supa_ext; fused supa operators (e.g. sudnn.rms_norm_func) "
+                "will be unavailable and the eager path may be extremely slow."
+            )
+
+        # supa uses fork-unsafe device handles; align with the NPU workaround.
+        os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
+
 
 def _verify_model_args(
     model_args: "ModelArguments",
@@ -261,6 +296,9 @@ def _check_extra_dependencies(
         check_version("accelerate-kt", mandatory=True)
 
     if model_args.use_unsloth:
+        if is_torch_supa_available():
+            raise ValueError("`use_unsloth` is not supported on supa devices.")
+
         check_version("unsloth", mandatory=True)
 
     if model_args.enable_liger_kernel:
@@ -501,7 +539,11 @@ def get_train_args(args: dict[str, Any] | list[str] | None = None) -> _TRAIN_CLS
         raise ValueError("Please use scripts/pissa_init.py to initialize PiSSA in DeepSpeed ZeRO-3.")
 
     if finetuning_args.pure_bf16:
-        if not (is_torch_bf16_gpu_available() or (is_torch_npu_available() and torch.npu.is_bf16_supported())):
+        if not (
+            is_torch_bf16_gpu_available()
+            or (is_torch_npu_available() and torch.npu.is_bf16_supported())
+            or (is_torch_supa_available() and torch.supa.is_bf16_supported())
+        ):
             raise ValueError("This device does not support `pure_bf16`.")
 
         if is_deepspeed_zero3_enabled():

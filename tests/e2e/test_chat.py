@@ -38,13 +38,13 @@ MESSAGES = [
 EXPECTED_RESPONSE = "_rho"
 
 
-@pytest.mark.runs_on(["cpu", "mps"])
+@pytest.mark.runs_on(["cpu", "mps", "xpu"])
 def test_chat():
     chat_model = ChatModel(local_model_args(INFER_ARGS))
     assert chat_model.chat(MESSAGES)[0].response_text == EXPECTED_RESPONSE
 
 
-@pytest.mark.runs_on(["cpu", "mps"])
+@pytest.mark.runs_on(["cpu", "mps", "xpu"])
 def test_stream_chat():
     chat_model = ChatModel(local_model_args(INFER_ARGS))
     response = ""

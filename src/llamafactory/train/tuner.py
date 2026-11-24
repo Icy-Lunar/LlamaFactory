@@ -165,6 +165,10 @@ def _training_function(config: dict[str, Any]) -> None:
         run_pt(model_args, data_args, training_args, finetuning_args, callbacks)
     elif finetuning_args.stage == "sft":
         run_sft(model_args, data_args, training_args, finetuning_args, generating_args, callbacks)
+    elif finetuning_args.stage == "decision":
+        from .decision import run_decision
+
+        run_decision(model_args, data_args, training_args, finetuning_args, callbacks)
     elif finetuning_args.stage == "rm":
         run_rm(model_args, data_args, training_args, finetuning_args, callbacks)
     elif finetuning_args.stage == "ppo":
@@ -317,6 +321,7 @@ class Worker:
         RAY_NOSET_VISIBLE_DEVICES_LIST = [
             "RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES",
             "RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES",
+            "RAY_EXPERIMENTAL_NOSET_SUPA_VISIBLE_DEVICES",
         ]
         is_ray_noset_visible_devices = any(os.environ.get(env_var, None) for env_var in RAY_NOSET_VISIBLE_DEVICES_LIST)
         if is_ray_noset_visible_devices:

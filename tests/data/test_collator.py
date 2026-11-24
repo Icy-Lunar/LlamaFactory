@@ -33,7 +33,7 @@ from tests.model_fixtures import local_model_path
 TINY_LLAMA3 = os.getenv("TINY_LLAMA3", "llamafactory/tiny-random-Llama-3")
 
 
-@pytest.mark.runs_on(["cpu", "mps"])
+@pytest.mark.runs_on(["cpu", "mps", "xpu"])
 def test_base_collator():
     model_args, data_args, *_ = get_infer_args(
         {"model_name_or_path": local_model_path(TINY_LLAMA3, weights=False), "template": "default"}
@@ -79,7 +79,7 @@ def test_base_collator():
         assert batch_input[k].eq(torch.tensor(expected_input[k])).all()
 
 
-@pytest.mark.runs_on(["cpu", "mps"])
+@pytest.mark.runs_on(["cpu", "mps", "xpu"])
 def test_multimodal_collator():
     model_args, data_args, *_ = get_infer_args(
         {"model_name_or_path": local_model_path("Qwen/Qwen2-VL-2B-Instruct", weights=False), "template": "qwen2_vl"}
@@ -273,7 +273,7 @@ def _get_expected_position_ids(
     return torch.cat(all_position_ids, dim=-1)
 
 
-@pytest.mark.runs_on(["cpu", "mps"])
+@pytest.mark.runs_on(["cpu", "mps", "xpu"])
 def test_multimodal_collator_with_packing():
     model_args, data_args, *_ = get_infer_args(
         {"model_name_or_path": local_model_path("Qwen/Qwen2-VL-2B-Instruct", weights=False), "template": "qwen2_vl"}
@@ -325,7 +325,7 @@ def test_multimodal_collator_with_packing():
     assert batch_input["position_ids"][1:, :, :valid_len].eq(expected_position_ids).all()
 
 
-@pytest.mark.runs_on(["cpu"])
+@pytest.mark.runs_on(["cpu", "xpu"])
 def test_4d_attention_mask():
     o = 0.0
     x = torch.finfo(torch.float16).min

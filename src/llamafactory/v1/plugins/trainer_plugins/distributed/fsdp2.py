@@ -31,6 +31,7 @@ from torch.distributed.checkpoint.state_dict import (
 )
 from torch.distributed.fsdp import (
     CPUOffloadPolicy,
+    FSDPModule,
     MixedPrecisionPolicy,
     fully_shard,
 )
@@ -126,6 +127,19 @@ def get_transformer_layer_cls(model: HFModel) -> set[type[nn.Module]]:
     return set()
 
 
+def _save_pretrained(model: HFModel, output_dir: str, state_dict: dict) -> None:
+    """Serialize remote model code using its original class instead of FSDP2's generated wrapper."""
+    model_cls = type(model)
+    if isinstance(model, FSDPModule) and getattr(model_cls, "_auto_class", None) is not None:
+        # fully_shard creates a class with bases (FSDPModule, original_model_class).
+        # HF otherwise copies PyTorch's FSDP source and writes an unloadable auto_map.
+        model.__class__ = model_cls.__bases__[1]
+    try:
+        model.save_pretrained(output_dir, state_dict=state_dict, max_shard_size="4GB")
+    finally:
+        model.__class__ = model_cls
+
+
 def save_model(model: HFModel, output_dir: str, processor: Processor) -> None:
     if DistributedInterface().get_rank() == 0:
         logger.info("Gathering state dict for saving...")
@@ -136,7 +150,7 @@ def save_model(model: HFModel, output_dir: str, processor: Processor) -> None:
 
     if DistributedInterface().get_rank() == 0:
         model_to_save = model.module if hasattr(model, "module") else model
-        model_to_save.save_pretrained(output_dir, state_dict=state_dict, max_shard_size="4GB")
+        _save_pretrained(model_to_save, output_dir, state_dict)
         processor.save_pretrained(output_dir, max_shard_size="4GB")
         logger.info(f"Model saved to {output_dir}")
 
@@ -166,7 +180,7 @@ def save_checkpoint(model: HFModel, optimizer: torch.optim.Optimizer, ckpt_dir: 
         if DistributedInterface().get_rank() == 0:
             model_to_save = model.module if hasattr(model, "module") else model
             hf_dir = os.path.join(ckpt_dir, "hf_model")
-            model_to_save.save_pretrained(hf_dir, state_dict=hf_state_dict, max_shard_size="4GB")
+            _save_pretrained(model_to_save, hf_dir, hf_state_dict)
             if processor is not None:
                 processor.save_pretrained(hf_dir, max_shard_size="4GB")
 
@@ -378,6 +392,8 @@ class FSDP2Engine:
         init_mode = getattr(model, "_init_mode", "init_on_default")
 
         if init_mode == "init_on_rank0":
+            non_persistent_buffers = self._save_non_persistent_buffers(model) if self.rank == 0 else {}
+
             if getattr(model.config, "tie_word_embeddings", False):
                 model.tie_weights()
 
@@ -396,6 +412,13 @@ class FSDP2Engine:
             # Broadcast the full state dict from the global rank-0 process to all ranks in this group.
             options = StateDictOptions(full_state_dict=True, cpu_offload=True, broadcast_from_rank0=True)
             set_model_state_dict(model, full_sd, options=options)
+            self._restore_non_persistent_buffers(model, non_persistent_buffers)
+            if self.world_size > 1:
+                for module in model.modules():
+                    for buffer_name in sorted(module._non_persistent_buffers_set):
+                        buffer = getattr(module, buffer_name, None)
+                        if buffer is not None:
+                            torch.distributed.broadcast(buffer, src=0)
 
             if self.rank == 0:
                 logger.info("init_on_rank0 sync complete.")
@@ -547,11 +570,12 @@ class FSDP2Engine:
                         renamed_key = key
                         source_pattern = None
                         if conversion_ctx is not None:
+                            # pass prefix positionally: transformers 5.10 renamed the kwarg to `base_model_prefix`
                             renamed_key, source_pattern = conversion_ctx["rename_source_key"](
                                 key,
                                 conversion_ctx["renamings"],
                                 conversion_ctx["converters"],
-                                prefix=conversion_ctx["prefix"],
+                                conversion_ctx["prefix"],
                                 meta_state_dict=conversion_ctx["meta_state_dict"],
                             )
 
